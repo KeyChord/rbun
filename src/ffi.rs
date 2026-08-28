@@ -53,6 +53,19 @@ pub const kJSTypedArrayTypeBigUint64Array: JSTypedArrayType = 12;
 
 pub type JSTypedArrayBytesDeallocator = Option<unsafe extern "C" fn(bytes: *mut c_void, deallocator_context: *mut c_void)>;
 
+/// Result counters produced by Bun's native `bun:test` runner.
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct BunEmbedTestResult {
+    pub pass: u32,
+    pub fail: u32,
+    pub skip: u32,
+    pub todo: u32,
+    pub expectations: u32,
+    pub files: u32,
+    pub unhandled_errors: u32,
+}
+
 pub type JSObjectInitializeCallback = Option<unsafe extern "C" fn(ctx: JSContextRef, object: JSObjectRef)>;
 pub type JSObjectFinalizeCallback = Option<unsafe extern "C" fn(object: JSObjectRef)>;
 pub type JSObjectCallAsFunctionCallback = Option<
@@ -340,14 +353,32 @@ unsafe extern "C" {
     pub fn bun_embed_vm_delete_module_registry_entry(vm: *mut c_void, specifier_ptr: *const u8, specifier_len: usize) -> bool;
 
     // ─── Bun embedding (vendor/bun/src/runtime/embed.rs) ───
+    pub fn bun_embed_run_internal_process_mode();
     pub fn bun_embed_init(argc: c_int, argv: *const *const c_char, install_crash_handler: bool);
     pub fn bun_embed_vm_create(cwd_ptr: *const u8, cwd_len: usize) -> *mut c_void;
+    pub fn bun_embed_test_vm_create(cwd_ptr: *const u8, cwd_len: usize) -> *mut c_void;
+    pub fn bun_embed_test_run_file(
+        vm: *mut c_void,
+        path_ptr: *const u8,
+        path_len: usize,
+        out_result: *mut BunEmbedTestResult,
+    ) -> c_int;
     pub fn bun_embed_vm_global_object(vm: *mut c_void) -> *mut c_void;
+    pub fn bun_embed_vm_configure_entrypoint(
+        vm: *mut c_void,
+        main_ptr: *const u8,
+        main_len: usize,
+        argv_ptrs: *const *const u8,
+        argv_lens: *const usize,
+        argc: usize,
+    ) -> bool;
+    pub fn bun_embed_vm_run_eval(vm: *mut c_void, source_ptr: *const u8, source_len: usize) -> c_int;
     pub fn bun_embed_vm_tick(vm: *mut c_void);
     pub fn bun_embed_vm_drain_microtasks(vm: *mut c_void);
     pub fn bun_embed_vm_is_event_loop_alive(vm: *mut c_void) -> bool;
     pub fn bun_embed_vm_auto_tick_active(vm: *mut c_void);
     pub fn bun_embed_vm_run_until_idle(vm: *mut c_void);
+    pub fn bun_embed_vm_finish_process(vm: *mut c_void) -> !;
     pub fn bun_embed_vm_wait_for_promise(vm: *mut c_void, promise: usize) -> c_int;
     pub fn bun_embed_promise_status(promise: usize) -> c_int;
     pub fn bun_embed_promise_result(vm: *mut c_void, promise: usize) -> usize;

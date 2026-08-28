@@ -52,6 +52,19 @@ mod string;
 pub mod utils;
 pub mod value;
 
+/// Enter any private Bun subprocess mode requested through the environment.
+///
+/// Call this as the first statement in an embedding executable's `main`.
+/// Most invocations return immediately. On macOS, a [`Bun.WebView`](https://bun.com/docs/runtime/webview)
+/// host child re-executes the current executable with a private environment
+/// marker; this function transfers that child into Bun's native WebKit event
+/// loop and does not return.
+pub fn run_internal_process_mode() {
+    // SAFETY: the ABI takes no arguments. Its only special path validates the
+    // inherited file descriptor before entering Bun's non-returning host loop.
+    unsafe { ffi::bun_embed_run_internal_process_mode() }
+}
+
 /// `rquickjs::context` compatibility path.
 pub mod context {
     pub use crate::runtime::{Context, ContextBuilder, Ctx, EvalOptions, intrinsic};
@@ -78,7 +91,10 @@ pub use loader::{Loader, Resolver};
 pub use module::{Declarations, Evaluated, Exports, Module, ModuleDef};
 pub use object::{Accessor, AsProperty, Filter, Property};
 pub use persistent::{Outlive, Persistent};
-pub use runtime::{Context, ContextBuilder, Ctx, EvalOptions, JsLifetime, Runtime, RuntimeOptions, UserDataGuard};
+pub use runtime::{
+    Context, ContextBuilder, Ctx, EvalOptions, JsLifetime, Runtime, RuntimeOptions, TestResult,
+    UserDataGuard,
+};
 pub use utils::{ResultExt, format_error};
 pub use value::{Array, BigInt, Constructor, FromJs, Function, IntoArgs, IntoJs, Object, Promise, PromiseState, String, Symbol, Type, Value};
 

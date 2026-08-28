@@ -1,0 +1,82 @@
+{
+  "$schema": 1,
+  "sourceRoots": ["js/bun", "js/node", "js/web"],
+  "cliSubcommands": [
+    "add",
+    "build",
+    "create",
+    "exec",
+    "i",
+    "init",
+    "install",
+    "link",
+    "outdated",
+    "pm",
+    "remove",
+    "run",
+    "test",
+    "unlink",
+    "update",
+    "upgrade",
+    "x"
+  ],
+  "suites": {
+    "image": {
+      "description": "The complete pinned Bun.Image suite, unchanged.",
+      "files": [
+        "js/bun/image/image-adversarial.test.ts",
+        "js/bun/image/image-kernels.test.ts",
+        "js/bun/image/image-vs-sharp.test.ts",
+        "js/bun/image/image.test.ts"
+      ]
+    },
+    "webview-webkit": {
+      "description": "The complete pinned macOS Bun.WebView WebKit suite, unchanged, including Bun's re-executed native WebView host process.",
+      "files": [
+        "js/bun/webview/webview.test.ts"
+      ]
+    },
+    "runtime-smoke": {
+      "description": "Self-contained upstream coverage across Bun utilities, loaders, crypto, SQLite, HTTP, streams, and Node-facing objects.",
+      "files": [
+        "js/bun/bun-object/deep-equals-temporal.test.ts",
+        "js/bun/crypto/cipheriv-decipheriv.test.ts",
+        "js/bun/crypto/x25519-derive-bits.test.ts",
+        "js/bun/http/bun-serve-args.test.ts",
+        "js/bun/http/form-data-set-append.test.js",
+        "js/bun/perf_hooks/histogram.test.ts",
+        "js/bun/resolve/json5/json5.test.js",
+        "js/bun/resolve/toml/toml-parse.test.ts",
+        "js/bun/resolve/xml/xml.test.js",
+        "js/bun/resolve/yaml/yaml.test.js",
+        "js/bun/sqlite/column-types.test.js",
+        "js/bun/util/base64-url-safe-encode.test.ts",
+        "js/bun/util/concat.test.js",
+        "js/bun/util/cookie.test.js",
+        "js/bun/util/csrf.test.ts",
+        "js/bun/util/escapeHTML.test.js",
+        "js/bun/util/fileUrl.test.js",
+        "js/bun/util/randomUUIDv5.test.ts"
+      ]
+    },
+    "runtime-subprocess-smoke": {
+      "description": "Pinned upstream checks whose bunExe() children use the supported runtime-only -e form.",
+      "files": [
+        "js/bun/cron/cron-local-time.test.ts",
+        "js/bun/import-attributes/import-attributes.test.ts"
+      ]
+    },
+    "portable-runtime": {
+      "description": "Every Bun/Node/Web test file that does not directly invoke bunExe() or bunRun().",
+      "classification": "in-process"
+    },
+    "runtime-subprocess": {
+      "description": "Files that invoke bunExe(), but do not visibly invoke a package-manager, bundler, or test CLI subcommand.",
+      "classification": "runtime-subprocess"
+    }
+  },
+  "exclusions": {
+    "cli": "The file visibly invokes Bun package-manager, bundler, or other CLI subcommands; those commands are outside rbun's runtime-only compatibility target.",
+    "mixed": "The file mixes runtime subprocess checks with out-of-scope Bun CLI checks and needs test-case-level splitting before inclusion."
+  }
+}

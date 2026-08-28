@@ -95,14 +95,20 @@ for (const line of nm.stdout.split("\n")) {
   if (m) jscApi.add(m[1]);
 }
 const embedSyms = [
+  "_bun_embed_run_internal_process_mode",
   "_bun_embed_init",
   "_bun_embed_vm_create",
+  "_bun_embed_test_vm_create",
+  "_bun_embed_test_run_file",
   "_bun_embed_vm_global_object",
+  "_bun_embed_vm_configure_entrypoint",
+  "_bun_embed_vm_run_eval",
   "_bun_embed_vm_tick",
   "_bun_embed_vm_drain_microtasks",
   "_bun_embed_vm_is_event_loop_alive",
   "_bun_embed_vm_auto_tick_active",
   "_bun_embed_vm_run_until_idle",
+  "_bun_embed_vm_finish_process",
   "_bun_embed_vm_wait_for_promise",
   "_bun_embed_promise_status",
   "_bun_embed_promise_result",

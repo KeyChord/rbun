@@ -51,10 +51,12 @@ Create a directory under `fixtures/<area>/<case>/` containing a `case.json`:
 The timeout and expected status are optional (the defaults are 20 seconds and
 zero). A reference timeout, signal, or unexpected exit status always fails,
 so two equally broken runs cannot accidentally pass as compatible. Keep every
-dependency and fixture inside that case directory. Tests should be ordinary JS/TS modules and can use
-`node:assert/strict`; do not import `bun:test`, because that module requires
-Bun's special CLI test-runner VM rather than the production runtime being
-compared here. Prefer deterministic output and hermetic local resources.
+dependency and fixture inside that case directory. Tests should be ordinary
+JS/TS modules and can use `node:assert/strict`; do not import `bun:test`,
+because that module requires Bun's special test-runner VM rather than the
+production runtime being compared here. Native `bun:test` coverage is handled
+separately by `../scripts/bun-upstream-tests.ts`. Prefer deterministic output
+and hermetic local resources.
 
 When adapting an upstream Bun test, copy its runtime assertion and minimal
 fixtures rather than its `bun:test` wrapper. Keep the upstream commit/path in a
@@ -80,7 +82,39 @@ one-shot CLI `beforeExit` / `exit` shutdown events.
 The suite targets code executed inside the embedded Bun runtime: JavaScript,
 TypeScript/JSX, ESM/CJS loading, package resolution, Node/Bun/Web APIs, event
 loop behavior, I/O, exceptions, and observable process state. Bun CLI commands
-(`bun install`, `bun test`, `bun build`, argument parsing, watch mode) are not
-part of rbun's embedding contract. Rust-to-JavaScript conversion, callbacks,
-GC rooting, custom loaders, and host futures remain covered by the Rust-facing
-tests in `../tests/` because the Bun executable has no comparable API.
+(`bun install`, test discovery/CLI options, `bun build`, general argument
+parsing, watch mode) are not part of rbun's embedding contract. The native
+single-file test runner is covered by the pinned upstream suites below.
+Rust-to-JavaScript conversion, callbacks, GC rooting, custom loaders, and host
+futures remain covered by the Rust-facing tests in `../tests/` because the Bun
+executable has no comparable API.
+
+## Pinned upstream runtime suites
+
+`../scripts/bun-upstream-tests.ts` is the complementary native-`bun:test`
+harness. It sparse-checks out `test/` from the exact commit recorded in
+`../vendor/bun/VENDORED_COMMIT`, then executes unchanged upstream files under
+both that commit's Bun executable and rbun's embedded test VM. A file passes
+only when both processes succeed and their pass/fail/skip/todo, assertion,
+file, and unhandled-error counts match exactly.
+
+```sh
+bun scripts/bun-upstream-tests.ts sync
+bun scripts/bun-upstream-tests.ts classify
+bun scripts/bun-upstream-tests.ts run image
+bun scripts/bun-upstream-tests.ts run webview-webkit
+bun scripts/bun-upstream-tests.ts run runtime-smoke
+bun scripts/bun-upstream-tests.ts run runtime-subprocess-smoke
+```
+
+The two broad suites are `portable-runtime` (no visible `bunExe()` call) and
+`runtime-subprocess` (runtime-only child Bun calls). They can be narrowed with
+a path substring as the final argument. Classification is deliberately a
+reviewable file-level heuristic; `upstream-suites.json` records the named
+files and explains why visible package-manager/bundler CLI cases and mixed
+files are excluded.
+
+Upstream's full test tree assumes various services, platform capabilities,
+large fixtures, and development dependencies. Consequently the broad sweeps
+are diagnostic rather than part of `cargo test`: a missing prerequisite is
+reported as a reference failure and must not be counted as an rbun pass.

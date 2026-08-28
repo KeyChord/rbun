@@ -16,6 +16,7 @@ use core::ffi::{c_char, c_int};
 use core::marker::PhantomData;
 use core::ops::Deref;
 use std::collections::{HashMap, VecDeque};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -67,6 +68,7 @@ pub(crate) struct RuntimeInner {
     pub(crate) vm: *mut core::ffi::c_void,
     pub(crate) ctx: ffi::JSGlobalContextRef,
     cwd: PathBuf,
+    test_mode: bool,
     pending_exception: Cell<ffi::JSValueRef>,
     userdata: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
     pub(crate) modules: RefCell<ModuleRegistry>,
@@ -94,6 +96,24 @@ pub struct Runtime {
     pub(crate) inner: Rc<RuntimeInner>,
 }
 
+/// Counters from one file executed by Bun's native `bun:test` runner.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TestResult {
+    pub pass: u32,
+    pub fail: u32,
+    pub skip: u32,
+    pub todo: u32,
+    pub expectations: u32,
+    pub files: u32,
+    pub unhandled_errors: u32,
+}
+
+impl TestResult {
+    pub fn passed(self) -> bool {
+        self.fail == 0 && self.unhandled_errors == 0
+    }
+}
+
 impl Runtime {
     /// Boot Bun on the current thread with the process' cwd and argv, or
     /// return a handle to the runtime this thread already has.
@@ -104,7 +124,105 @@ impl Runtime {
     /// Boot Bun on the current thread (options are ignored when the thread
     /// already has a runtime).
     pub fn new_with(options: RuntimeOptions) -> Result<Runtime> {
+        Self::new_with_mode(options, false)
+    }
+
+    /// Boot a process-exclusive VM backed by Bun's native `bun:test` runner.
+    ///
+    /// This mode is intended for one-shot test hosts. A normal VM and a test
+    /// VM cannot coexist in one process because Bun's runner switch is global.
+    pub fn new_test_with(options: RuntimeOptions) -> Result<Runtime> {
+        Self::new_with_mode(options, true)
+    }
+
+    /// Give an ordinary VM a one-shot entry point and its user arguments.
+    ///
+    /// Call this before importing `entrypoint` when implementing a `bun run`
+    /// style executable. It updates Bun's native VM metadata, so
+    /// `Bun.main`, `import.meta.main`, `require.main`, and `process.argv`
+    /// agree on the entry module. The process-level arguments passed through
+    /// [`RuntimeOptions::argv`] remain the source of `process.execArgv`.
+    pub fn configure_entrypoint<I, S>(
+        &self,
+        entrypoint: impl AsRef<Path>,
+        arguments: I,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        if self.inner.test_mode {
+            return Err(Error::Init(
+                "configure_entrypoint is only available on an ordinary runtime".into(),
+            ));
+        }
+        let main = entrypoint.as_ref().as_os_str().as_encoded_bytes();
+        if main.is_empty() {
+            return Err(Error::Init("entrypoint must not be empty".into()));
+        }
+        let arguments: Vec<Box<[u8]>> = arguments
+            .into_iter()
+            .map(|argument| argument.as_ref().as_encoded_bytes().into())
+            .collect();
+        let pointers: Vec<*const u8> = arguments.iter().map(|argument| argument.as_ptr()).collect();
+        let lengths: Vec<usize> = arguments.iter().map(|argument| argument.len()).collect();
+        // SAFETY: all slices and pointer arrays remain live for this call; Bun
+        // clones their contents into process-lifetime VM storage.
+        let configured = unsafe {
+            ffi::bun_embed_vm_configure_entrypoint(
+                self.inner.vm,
+                main.as_ptr(),
+                main.len(),
+                pointers.as_ptr(),
+                lengths.as_ptr(),
+                arguments.len(),
+            )
+        };
+        if configured {
+            Ok(())
+        } else {
+            Err(Error::Init(last_error()))
+        }
+    }
+
+    /// Execute source through Bun's native `bun -e` / `[eval]` module path.
+    ///
+    /// Call [`Runtime::configure_entrypoint`] first with an absolute path
+    /// ending in `[eval]`. Static imports and top-level await are supported.
+    /// A JavaScript rejection is reported by Bun and reflected in the exit
+    /// code used by [`Runtime::finish_process`].
+    pub fn run_eval_source(&self, source: impl AsRef<[u8]>) -> Result<()> {
+        if self.inner.test_mode {
+            return Err(Error::Init(
+                "run_eval_source is only available on an ordinary runtime".into(),
+            ));
+        }
+        let source = source.as_ref();
+        // SAFETY: source remains live for the call; Bun clones it into
+        // process-lifetime storage before loading the eval entry.
+        match unsafe {
+            ffi::bun_embed_vm_run_eval(self.inner.vm, source.as_ptr(), source.len())
+        } {
+            0 | 1 => Ok(()),
+            _ => Err(Error::Init(last_error())),
+        }
+    }
+
+    /// Complete a one-shot process using Bun's native `beforeExit` / `exit`
+    /// lifecycle, native resource teardown, and exit code. This never returns.
+    pub fn finish_process(&self) -> ! {
+        // SAFETY: the runtime is live on its owning thread. The ABI drains and
+        // terminates the entire process, so no Rust value can observe teardown.
+        unsafe { ffi::bun_embed_vm_finish_process(self.inner.vm) }
+    }
+
+    fn new_with_mode(options: RuntimeOptions, test_mode: bool) -> Result<Runtime> {
         if let Some(existing) = THREAD_RUNTIME.with(|r| r.borrow().clone()) {
+            if existing.test_mode != test_mode {
+                return Err(Error::Init(
+                    "normal and bun:test runtimes cannot coexist on one thread".into(),
+                ));
+            }
             return Ok(Runtime { inner: existing });
         }
 
@@ -125,7 +243,13 @@ impl Runtime {
         let cwd = options.cwd.canonicalize().unwrap_or(options.cwd);
         let cwd_bytes = cwd.as_os_str().as_encoded_bytes();
         // SAFETY: valid (ptr, len) pair.
-        let vm = unsafe { ffi::bun_embed_vm_create(cwd_bytes.as_ptr(), cwd_bytes.len()) };
+        let vm = if test_mode {
+            // SAFETY: valid (ptr, len) pair; test mode is process-exclusive.
+            unsafe { ffi::bun_embed_test_vm_create(cwd_bytes.as_ptr(), cwd_bytes.len()) }
+        } else {
+            // SAFETY: valid (ptr, len) pair.
+            unsafe { ffi::bun_embed_vm_create(cwd_bytes.as_ptr(), cwd_bytes.len()) }
+        };
         if vm.is_null() {
             return Err(Error::Init(last_error()));
         }
@@ -136,6 +260,7 @@ impl Runtime {
             vm,
             ctx,
             cwd,
+            test_mode,
             pending_exception: Cell::new(core::ptr::null()),
             userdata: RefCell::new(HashMap::new()),
             modules: RefCell::new(ModuleRegistry::default()),
@@ -158,6 +283,44 @@ impl Runtime {
         })?;
         crate::module::install_hooks(&rt)?;
         Ok(rt)
+    }
+
+    /// Execute one file with Bun's native `bun:test` runner.
+    ///
+    /// The test VM is logically consumed by this call: Bun dispatches its
+    /// test-process exit lifecycle and tears down runner roots before
+    /// returning. The hosting process should exit after inspecting the result.
+    pub fn run_test_file(&self, path: impl AsRef<Path>) -> Result<TestResult> {
+        if !self.inner.test_mode {
+            return Err(Error::Init(
+                "run_test_file requires Runtime::new_test_with".into(),
+            ));
+        }
+        let path = path.as_ref().canonicalize().map_err(Error::Io)?;
+        let bytes = path.as_os_str().as_encoded_bytes();
+        let mut raw = ffi::BunEmbedTestResult::default();
+        // SAFETY: the runtime is a live test VM on this thread, `bytes` and
+        // `raw` remain valid for the duration of the synchronous call.
+        let status = unsafe {
+            ffi::bun_embed_test_run_file(
+                self.inner.vm,
+                bytes.as_ptr(),
+                bytes.len(),
+                &mut raw,
+            )
+        };
+        if status == 2 {
+            return Err(Error::Init(last_error()));
+        }
+        Ok(TestResult {
+            pass: raw.pass,
+            fail: raw.fail,
+            skip: raw.skip,
+            todo: raw.todo,
+            expectations: raw.expectations,
+            files: raw.files,
+            unhandled_errors: raw.unhandled_errors,
+        })
     }
 
     /// Run a closure with a [`Ctx`] (Bun has a single realm, so this is the

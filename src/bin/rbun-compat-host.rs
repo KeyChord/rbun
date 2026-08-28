@@ -13,6 +13,8 @@ use rbun::{Context, Module, Object, Runtime, RuntimeOptions};
 const JS_STACK_SIZE: usize = 16 * 1024 * 1024;
 
 fn main() {
+    rbun::run_internal_process_mode();
+
     let mut args = std::env::args_os();
     let program = args.next().unwrap_or_default();
     let Some(fixture) = args.next() else {

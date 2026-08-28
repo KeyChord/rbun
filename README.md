@@ -18,6 +18,7 @@ use rbun::{AsyncContext, AsyncRuntime, Module, async_with};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> rbun::Result<()> {
+    rbun::run_internal_process_mode();
     let rt = AsyncRuntime::new()?;
     let ctx = AsyncContext::full(&rt).await?;
     async_with!(ctx => |ctx| {
@@ -142,20 +143,29 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
 
 - **Runtime embedding, not the CLI.** rbun boots Bun's VM, APIs, transpiler,
   module loader, and event loop inside the host process. It does not expose
-  Bun's command-line workflows (`bun install`, `bun run`, `bun test`, or CLI
-  `bun build`), CLI argument parsing, or bunfig-driven startup configuration.
-  Invoke the Bun executable separately for those workflows.
+  package-manager/bundler workflows (`bun install`, CLI `bun build`, etc.),
+  general CLI argument parsing, watch mode, or bunfig-driven startup
+  configuration. The native test runner and one-shot `bun run` lifecycle are
+  available as embedding APIs, but rbun is not a general replacement `bun`
+  CLI.
 - **Host-driven lifetime and event loop.** A VM is process-lifetime and bound
   to its creating thread. Unlike the Bun executable's automatic
   run-to-completion loop, the Rust host drives work with `async_with!`,
-  `AsyncRuntime::idle`, `Runtime::idle`, or explicit ticks.
+  `AsyncRuntime::idle`, `Runtime::idle`, or explicit ticks. A one-shot host can
+  instead use `Runtime::configure_entrypoint`, `Runtime::run_eval_source`, and
+  the non-returning `Runtime::finish_process` for Bun-native entrypoint, argv,
+  `beforeExit`/`exit`, teardown, and exit-code behavior.
+- **Internal child modes.** Call `rbun::run_internal_process_mode()` at the
+  start of an embedding executable. On macOS, `Bun.WebView` re-executes that
+  executable with a private environment marker; this hook transfers the child
+  to Bun's native WebKit host loop before argument parsing or JSC startup.
 - **Platform support.** The current shared-library build/link workflow is
   macOS-only (`libbun_embed.dylib`). Bun itself supports more platforms, but
   rbun's embedding link script has not yet been ported to them.
 
 ## Bun differential compatibility suite
 
-`tests/bun_compat.rs` runs hermetic JS/TS fixtures in fresh processes under
+`tests/bun_compat.rs` runs 32 hermetic JS/TS fixtures in fresh processes under
 both the same-commit vendored Bun executable and rbun's production embedding
 path. It compares exit status, stdout/stderr, and filesystem side effects.
 Unlisted differences fail; intentional embedding differences are locked to
@@ -166,9 +176,53 @@ cargo test --test bun_compat -- --nocapture
 RBUN_COMPAT_FILTER=modules/ cargo test --test bun_compat -- --nocapture
 ```
 
-The suite covers runtime behavior rather than Bun's CLI commands or its
-special `bun:test` VM. See [`compat/README.md`](compat/README.md) for the test
-contract, extension format, overrides, and expected-deviation policy.
+That suite intentionally exercises the continuing, host-driven API rather
+than Bun's CLI commands. See [`compat/README.md`](compat/README.md) for the
+test contract, extension format, overrides, and expected-deviation policy.
+
+### Native `bun:test` and pinned upstream suites
+
+`Runtime::new_test_with` creates a process-exclusive VM with Bun's real Jest
+runner, command-line reporter, hooks, matchers, snapshots, fake timers, test
+environment, and exit lifecycle. `Runtime::run_test_file` executes one test
+file and returns Bun's native pass/fail/skip/todo/assertion counters. The
+`rbun-test-host` binary is the one-shot adapter used by the upstream harness;
+when an upstream test calls `bunExe()`, runtime-only script and `-e` children
+are routed back through that same embedded rbun host.
+
+The upstream harness checks out the exact SHA in `VENDORED_COMMIT`, runs each
+unchanged file once with that revision's Bun and once with embedded rbun, and
+requires both success plus identical summary counters:
+
+```sh
+bun scripts/bun-upstream-tests.ts sync
+bun scripts/bun-upstream-tests.ts classify
+
+bun scripts/bun-upstream-tests.ts run image
+bun scripts/bun-upstream-tests.ts run webview-webkit       # macOS/WebKit
+bun scripts/bun-upstream-tests.ts run runtime-smoke
+bun scripts/bun-upstream-tests.ts run runtime-subprocess-smoke
+
+# Broad, environment-dependent sweeps; optional substring narrows either set.
+bun scripts/bun-upstream-tests.ts run portable-runtime [substring]
+bun scripts/bun-upstream-tests.ts run runtime-subprocess [substring]
+```
+
+At pinned revision `69c613875`, classification finds 1,021 Bun/Node/Web test
+files: 467 in-process, 456 runtime-subprocess, 43 mixed runtime/CLI, and 55
+CLI-only. Thus 554 files call `bunExe()`/`bunRun()`; the 456 runtime-only files
+are the broad subprocess target, while mixed and CLI files stay out until
+their CLI cases can be separated. The curated suites currently validate 780
+unchanged upstream tests and 9,705 `expect()` calls: all 224 `Bun.Image`
+tests, all 59 WebKit `Bun.WebView` tests, 455 cross-runtime smoke tests, and 42
+runtime-subprocess tests.
+
+Those results are strong evidence for the covered surfaces, not proof that
+every Bun program is identical. The broad sets contain platform-, service-,
+privilege-, fixture-, and dependency-sensitive tests; the harness reports a
+reference failure rather than treating two unavailable/broken executions as
+compatible. Named suites and classification policy live in
+[`compat/upstream-suites.json`](compat/upstream-suites.json).
 
 ## Benchmarks
 
@@ -210,8 +264,8 @@ Reading the table:
 ## Layout
 
 - `src/` — the crate (`ffi.rs` is the JavaScriptCore C API + `bun_embed_*`).
-- `compat/` — hermetic fixtures and the exact expected-deviation manifest for
-  the Bun-vs-rbun differential suite.
+- `compat/` — hermetic fixtures, the exact expected-deviation manifest, and
+  pinned upstream-suite selection/classification policy.
 - `macros/` — `#[rbun::class]`, `#[rbun::methods]`.
 - `vendor/bun/` — Bun at the commit in `VENDORED_COMMIT` (tests/benchmarks
   dropped) with the patches from `vendor-patches/` applied: `src/runtime/embed.rs`
