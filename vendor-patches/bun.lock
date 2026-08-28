@@ -1,0 +1,34 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "rbun-vendor-patches",
+      "devDependencies": {
+        "@codemod.com/jssg-types": "^1.6.2",
+        "codemod": "^1.15.3",
+      },
+    },
+  },
+  "packages": {
+    "@codemod.com/cli-darwin-arm64": ["@codemod.com/cli-darwin-arm64@1.15.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Okf2VwJkFcFep62BN501aNJHIWimdKogPpXV7Lg/Y99CNJMKjebgJFztprco1eR8ZS6COVueMDj2EPkNUYYF4g=="],
+
+    "@codemod.com/cli-darwin-x64": ["@codemod.com/cli-darwin-x64@1.15.3", "", { "os": "darwin", "cpu": "x64" }, "sha512-SELDFJxe3n3+2a0D4LhQ6PXTHW2w9QvQ7KCyq1msUEQjigMi4h66MY+MjHrn5g4XHEf+3vTYGnZx5O51pKx9Gg=="],
+
+    "@codemod.com/cli-linux-arm64-gnu": ["@codemod.com/cli-linux-arm64-gnu@1.15.3", "", { "os": "linux", "cpu": "arm64" }, "sha512-dhhCwoK/Fw/FZHyzav9VmwqBSsj/Pla5J6NeGCQhRg5sCQFUithNXZE0UpbPRpjxRzRaQGjsS7k4vvF5Mdv7Aw=="],
+
+    "@codemod.com/cli-linux-arm64-musl": ["@codemod.com/cli-linux-arm64-musl@1.15.3", "", { "os": "linux", "cpu": "arm64" }, "sha512-qZTSdmfZSIk9HGmaRL6C/2lj3sW4tiqvgqn+bx8IIwtCn8aANSe+U+Iu6m8uubaDGG1RbqquX87uYDW1Y0hlOA=="],
+
+    "@codemod.com/cli-linux-x64-gnu": ["@codemod.com/cli-linux-x64-gnu@1.15.3", "", { "os": "linux", "cpu": "x64" }, "sha512-I2cz1gSO5IGbeL2lDH47PSj/YYq1SOh27tseIzeBhKgnnvXe5/m7yWsqHNkGY9PTw9yx0eeYE5TbptEwOiPNhQ=="],
+
+    "@codemod.com/cli-linux-x64-musl": ["@codemod.com/cli-linux-x64-musl@1.15.3", "", { "os": "linux", "cpu": "x64" }, "sha512-y4N8TfPe5I1sRErIS9ZmPJ8Nhw4w5mp5xwnmL7Ht/5tWS1XPUJboy0UUr/xwxYxKZ5SJMZaVzM2PVM4jltM3UA=="],
+
+    "@codemod.com/cli-win32-x64-msvc": ["@codemod.com/cli-win32-x64-msvc@1.15.3", "", { "os": "win32", "cpu": "x64" }, "sha512-9jJ06hQnRzzksGl38u823AZLAc33fjWxcXJubJA+PC2CY2iG7AEeGl09r6vmbwV0plNQGq0u310GeaNaEMIzVw=="],
+
+    "@codemod.com/jssg-types": ["@codemod.com/jssg-types@1.6.3", "", {}, "sha512-b5829ixO5TdGL5xg5YcL9YfiLC3WwFZU+8Zx78NpsHlJ1iySbqfA0g0psqNXv8ss/r7hdpy2KiBXm3GE6bN5bQ=="],
+
+    "codemod": ["codemod@1.15.3", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "@codemod.com/cli-darwin-arm64": "1.15.3", "@codemod.com/cli-darwin-x64": "1.15.3", "@codemod.com/cli-linux-arm64-gnu": "1.15.3", "@codemod.com/cli-linux-arm64-musl": "1.15.3", "@codemod.com/cli-linux-x64-gnu": "1.15.3", "@codemod.com/cli-linux-x64-musl": "1.15.3", "@codemod.com/cli-win32-x64-msvc": "1.15.3" }, "bin": { "codemod": "codemod" } }, "sha512-Cu/FCzj7CLN2DtOkqaIgfW8mVnrNlGdN4mGyfr6vxqVJPqBDMk0s27NBh5EKPiW2EUXm8k6Kwh2NvKDAkUfWRw=="],
+
+    "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
+  }
+}

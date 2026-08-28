@@ -1,0 +1,26 @@
+version: "1"
+
+# This workflow is normally not executed by the codemod CLI directly — it is
+# driven by `vendor-patches/generate.ts`, which (re)vendors Bun, copies the
+# `files/` tree into `vendor/bun`, runs this JSSG codemod against each bundle
+# listed in `patch.json`, and writes `vendor-patches/bun.gen.patch`. The node
+# below mirrors that orchestration so the transformation can also be run in
+# isolation against an arbitrary Bun checkout:
+#
+#   bunx codemod jssg run --target <file> -l rust ./codemod.ts
+#
+# Or against this package's fixtures via:
+#
+#   bun run test
+nodes:
+  - id: patch-runtime
+    name: "Mount bun_embed and forward bare specifiers to plugins"
+    type: automatic
+    steps:
+      - name: "Run JSSG codemod"
+        js-ast-grep:
+          js_file: "codemod.ts"
+          language: "rust"
+          include:
+            - "vendor/bun/src/runtime/lib.rs"
+            - "vendor/bun/src/bundler/transpiler.rs"

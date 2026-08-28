@@ -1,0 +1,16 @@
+{
+  "name": "rbun-vendor-patches",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "apply": "bun ./generate.ts apply",
+    "check": "bun ./generate.ts check",
+    "upgrade": "bun ./generate.ts upgrade",
+    "test": "bun run --cwd codemods/bun test"
+  },
+  "devDependencies": {
+    "@codemod.com/jssg-types": "^1.6.2",
+    "codemod": "^1.15.3"
+  }
+}

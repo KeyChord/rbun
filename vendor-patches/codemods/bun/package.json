@@ -1,0 +1,9 @@
+{
+  "name": "rbun-vendor-patches-bun",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bunx codemod jssg test -l rust ./codemod.ts ./@fixtures"
+  }
+}

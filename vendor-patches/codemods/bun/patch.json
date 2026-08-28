@@ -1,0 +1,9 @@
+{
+  "repo": "https://github.com/oven-sh/bun",
+  "target": "vendor/bun",
+  "bundles": [
+    { "path": "src/runtime/lib.rs", "language": "rust" },
+    { "path": "src/bundler/transpiler.rs", "language": "rust" }
+  ],
+  "files": ["src/runtime/embed.rs", "scripts/embed-dylib.ts"]
+}

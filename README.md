@@ -35,8 +35,9 @@ async fn main() -> rbun::Result<()> {
 ## Building
 
 rbun links `vendor/bun/build/release/libbun_embed.dylib`, built from the
-vendored Bun checkout (a few small patches; see
-[`vendor/bun/RBUN_PATCHES.md`](vendor/bun/RBUN_PATCHES.md)):
+vendored Bun checkout. The checkout is upstream plus a small set of patches
+maintained as a JSSG codemod in [`vendor-patches/`](vendor-patches/README.md)
+(`bun.gen.patch` there is the reviewable diff):
 
 ```sh
 # macOS prerequisites
@@ -49,6 +50,18 @@ cargo test                                           # the ported rquickjs test 
 `RBUN_BUN_LIB_DIR` overrides where the dylib is looked up. Binaries that link
 rbun need an rpath to it (rbun's own examples/tests get one; a dependent
 crate's `build.rs` can read `DEP_BUN_EMBED_LIB_DIR`).
+
+### Upgrading Bun
+
+```sh
+bun vendor-patches/generate.ts upgrade <sha|tag|branch>   # re-vendor + re-apply the patches
+scripts/build-bun.sh && cargo test
+```
+
+If an upstream change moved one of the patch anchors the codemod fails loudly
+(`JSSG patch anchor drifted`); fix `vendor-patches/codemods/bun/codemod.ts`
+and its fixtures, then re-run `bun vendor-patches/generate.ts apply`. See
+[`vendor-patches/README.md`](vendor-patches/README.md).
 
 ## Compatibility with rquickjs
 
@@ -131,6 +144,11 @@ Reading the table:
 - `src/` — the crate (`ffi.rs` is the JavaScriptCore C API + `bun_embed_*`).
 - `macros/` — `#[rbun::class]`, `#[rbun::methods]`.
 - `vendor/bun/` — Bun at the commit in `VENDORED_COMMIT` (tests/benchmarks
-  dropped), with `src/runtime/embed.rs` (the embedding C ABI) and
-  `scripts/embed-dylib.ts` (links `libbun_embed.dylib`).
+  dropped) with the patches from `vendor-patches/` applied: `src/runtime/embed.rs`
+  (the embedding C ABI) and `scripts/embed-dylib.ts` (links
+  `libbun_embed.dylib`) are added, `src/runtime/lib.rs` and
+  `src/bundler/transpiler.rs` are edited. Never hand-edit these in `vendor/`;
+  change the codemod / `files/` and re-apply.
+- `vendor-patches/` — the JSSG codemod, the added files, the generator that
+  (re)vendors Bun and applies them, and the generated `bun.gen.patch`.
 - `tests/` — rquickjs-core's tests, ported.

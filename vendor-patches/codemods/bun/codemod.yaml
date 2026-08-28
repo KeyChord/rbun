@@ -1,0 +1,18 @@
+schema_version: "1.0"
+
+name: "rbun/bun-embed"
+version: "0.1.0"
+description: "Patch Bun's Rust runtime so it can be embedded by rbun: mount the bun_embed C ABI module and forward bare import specifiers to runtime onResolve plugins"
+author: "rbun"
+license: "MIT"
+workflow: "workflow.yaml"
+category: "patches"
+
+targets:
+  languages: ["rust"]
+
+keywords: ["patches", "bun", "rbun", "embedding", "javascriptcore"]
+
+registry:
+  access: "private"
+  visibility: "private"

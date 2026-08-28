@@ -136,8 +136,8 @@ edition = "2024"
 # requires the *linker's* LLVM to be ≥ rustc's bundled LLVM, so the build
 # points `-fuse-ld` at rustc's `rust-lld` rather than clang's when enabled.
 [profile.release]
-lto = "thin"
-codegen-units = 16
+lto = "fat"
+codegen-units = 1
 debug = "line-tables-only"
 strip = "none"
 panic = "abort"
@@ -186,7 +186,7 @@ inherits = "release"
 panic = "abort"
 opt-level = "z"
 lto = true
-codegen-units = 16
+codegen-units = 1
 strip = "symbols"
 # Pin these so the shim PE is byte-identical across bun's own profiles.
 # rust.ts sets CARGO_PROFILE_RELEASE_{LTO,DEBUG_ASSERTIONS} for the main

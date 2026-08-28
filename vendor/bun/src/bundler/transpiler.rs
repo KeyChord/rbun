@@ -97,15 +97,18 @@ impl PluginRunner {
                 return true;
             }
         }
-        // CHORD PATCH (rbun): upstream only forwards `ns:` specifiers here, so
-        // a bare name such as `chord` never reaches a runtime `onResolve`
-        // hook. Embedders using rbun's `Resolver` (modelled on rquickjs, whose
+        // [rbun patch] upstream only forwards `ns:` specifiers here, so a bare
+        // name such as `chord` never reaches a runtime `onResolve` hook.
+        // Embedders using rbun's `Resolver` (modelled on rquickjs, whose
         // resolvers see every specifier) need bare names too, so forward
         // everything that is neither absolute nor relative. The hook still
         // returns `undefined` for names it does not own, falling through to
         // bun's regular resolution.
         !bun_paths::is_absolute(specifier)
-            && !(specifier.starts_with(b"./") || specifier.starts_with(b"../") || specifier == b"." || specifier == b"..")
+            && !(specifier.starts_with(b"./")
+                || specifier.starts_with(b"../")
+                || specifier == b"."
+                || specifier == b"..")
     }
 }
 

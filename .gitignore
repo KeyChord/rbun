@@ -3,3 +3,4 @@
 /vendor/bun/node_modules
 /vendor/bun/vendor
 /vendor/bun/.cache
+/vendor-patches/node_modules
