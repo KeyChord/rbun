@@ -519,6 +519,16 @@ impl<'js> Ctx<'js> {
         None
     }
 
+    /// Forget a module Bun loaded from disk (or a declared one) so the next
+    /// `import` of `specifier` re-reads and re-evaluates it. `specifier` is
+    /// the resolved module key — an absolute file path for disk modules.
+    /// Modules that already imported it keep their old binding; evict the
+    /// whole graph you care about (typically every file of a package) before
+    /// re-importing its entry point. Evicting an unknown key is a no-op.
+    pub fn evict_module(&self, specifier: &str) {
+        self.inner.modules.borrow_mut().evict(*self, specifier);
+    }
+
     // ─── Event loop ───
 
     /// One non-blocking event-loop tick (tasks, immediates, microtasks).

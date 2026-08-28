@@ -200,6 +200,26 @@ fn register(ctx: Ctx<'_>, name: String, source: ModuleSource, meta: Value<'_>) {
     }
 }
 
+impl ModuleRegistry {
+    /// Drop `name` from this registry (if declared through rbun) and from
+    /// Bun's module loader registry, in both the plain and `rbun:` keyed forms.
+    pub(crate) fn evict(&mut self, ctx: Ctx<'_>, name: &str) {
+        if let Some(previous) = self.entries.remove(name) {
+            // SAFETY: balances `protect` for the removed entry.
+            unsafe {
+                ffi::JSValueUnprotect(ctx.raw(), previous.meta);
+                if let ModuleSource::Exports(exports) = previous.source {
+                    ffi::JSValueUnprotect(ctx.raw(), exports);
+                }
+            }
+        }
+        for key in [name.to_string(), format!("rbun:{name}"), format!("file://{name}")] {
+            // SAFETY: the runtime's VM, on its thread; valid (ptr, len).
+            unsafe { ffi::bun_embed_vm_delete_module_registry_entry(ctx.vm(), key.as_ptr(), key.len()) };
+        }
+    }
+}
+
 // ─── ModuleDef ───────────────────────────────────────────────────────────
 
 /// A native module: declares its export names, then fills them in.

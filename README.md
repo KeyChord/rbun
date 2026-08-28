@@ -8,9 +8,9 @@ on [rquickjs](https://docs.rs/rquickjs): `Runtime` / `Context` / `Ctx`,
 `Persistent`, `async_with!`, `Promise::into_future`, `serde`, …
 
 The engine is JavaScriptCore with Bun's event loop, module loader (TypeScript,
-JSX, `node:*`, `bun:*`, `node_modules`), and every Bun / Node API. Values are
-handled through JavaScriptCore's public C API; the runtime is Bun's own Rust
-code (Bun ≥ 1.4 is written in Rust) linked as `libbun_embed.dylib`.
+JSX, `node:*`, `bun:*`, `node_modules`), and Bun / Node runtime APIs. Values
+are handled through JavaScriptCore's public C API; the runtime is Bun's own
+Rust code (Bun ≥ 1.4 is written in Rust) linked as `libbun_embed.dylib`.
 
 ```rust
 use rbun::prelude::*;
@@ -65,10 +65,34 @@ and its fixtures, then re-run `bun vendor-patches/generate.ts apply`. See
 
 ## Compatibility with rquickjs
 
-The test suite in `tests/` is rquickjs-core's own test suite ported to rbun;
-everything runs unchanged except where noted below.
+The test suite in `tests/` ports the applicable public-API tests from
+`rquickjs-core` 0.11.0. Tests behind rquickjs-only optional features, such as
+its custom allocator and `parallel` modes, are outside the port's scope.
 
-Deviations:
+### Five rquickjs tests not ported
+
+Exactly five tests in the covered source modules are intentionally absent:
+
+| rquickjs source test | Why it is not ported |
+| --- | --- |
+| `value/proxy.rs::test::from_javascript` | It requires rquickjs's `Proxy` wrapper and QuickJS's non-standard `JS_GetProxyTarget` / `JS_GetProxyHandler` introspection. JavaScriptCore's public API has no equivalent. JavaScript-created proxies still work as ordinary rbun `Object`s. |
+| `value/proxy.rs::test::from_rust` | It constructs a proxy from a Rust `ProxyHandler` whose traps are Rust closures. rbun does not provide that QuickJS-specific Rust proxy facade; create a native JavaScript `Proxy` instead. |
+| `value/proxy.rs::test::class_proxy` | This is the same unsupported `ProxyHandler` bridge with a Rust-backed `Class` as its target. Rust-backed classes themselves are supported. |
+| `value/string.rs::test::from_javascript_c` | It converts JS directly into rquickjs's engine-owned `CString`, which wraps `JS_ToCStringLen` / `JS_FreeCString`. JavaScriptCore exposes strings differently; use `rbun::String::to_string()` for JS-to-Rust conversion. |
+| `value/string.rs::test::to_javascript_c` | It converts through that same rquickjs `CString` handle. rbun instead supports Rust `&CStr` / `std::ffi::CString` as `IntoJs` inputs. |
+
+These are omitted tests, not hidden failures. Four other upstream-derived
+tests remain in the suite with `#[ignore]` so their engine-level differences
+stay visible: class-cycle tracing, restoring a `Persistent` into an unrelated
+runtime, nested synchronous module evaluation, and the QuickJS host promise
+rejection tracker.
+
+## Differences and intentionally unsupported features
+
+rbun models the rquickjs API where the two engines have compatible concepts;
+it is not a drop-in replacement for every rquickjs or Bun executable feature.
+
+### Compared with rquickjs
 
 - **One VM per thread, one realm.** Bun boots once per thread and never tears
   the VM down. Every `Runtime::new()` on a thread returns a handle to that VM
@@ -95,12 +119,39 @@ Deviations:
   `Error::Exception` + `Ctx::catch` work like rquickjs.
 - **Eval:** `ctx.eval` is strict by default (like rquickjs); `EvalOptions {
   promise: true }` evaluates the source as an async module.
-- **`set_host_promise_rejection_tracker`** is stored but not invoked; use
-  `process.on("unhandledRejection")`.
-- **Not implemented:** `Proxy` / `ProxyHandler`, `CString` conversions,
-  `Context::custom` intrinsics (accepted, ignored), `Runtime::set_memory_limit`
-  / `set_max_stack_size` (accepted, ignored — spawn the JS thread with the
-  stack size you need).
+- **Intentionally unsupported rquickjs APIs:** `Proxy` / `ProxyHandler` and
+  rquickjs's engine-owned `CString`; these account for the five omitted tests
+  above. JavaScript's native `Proxy` and Rust standard-library C-string inputs
+  remain available.
+- **Compatibility no-ops:** `Context::base`, `Context::custom`, and
+  `ContextBuilder` all return Bun's full global realm; intrinsic selections
+  are ignored. `Runtime::set_memory_limit`, `set_gc_threshold`, and
+  `set_max_stack_size` are accepted but ignored because JavaScriptCore owns
+  heap/GC policy and sizes its stack from the host thread. Spawn the JS thread
+  with the stack size you need.
+- **Other accepted-but-ignored options:** `EvalOptions::global` and
+  `backtrace_barrier`, `json_parse_ext`'s extension flag,
+  `json_stringify_replacer`'s replacer, `json_stringify_replacer_space`'s
+  replacer/space, and private-key filtering. Use JavaScript's `JSON` methods
+  directly when replacer, reviver, or spacing behavior is required.
+- **Promise rejection tracking:** `set_host_promise_rejection_tracker` stores
+  the callback but Bun does not invoke it for engine-level unhandled
+  rejections; use `process.on("unhandledRejection")`.
+
+### Compared with the Bun executable
+
+- **Runtime embedding, not the CLI.** rbun boots Bun's VM, APIs, transpiler,
+  module loader, and event loop inside the host process. It does not expose
+  Bun's command-line workflows (`bun install`, `bun run`, `bun test`, or CLI
+  `bun build`), CLI argument parsing, or bunfig-driven startup configuration.
+  Invoke the Bun executable separately for those workflows.
+- **Host-driven lifetime and event loop.** A VM is process-lifetime and bound
+  to its creating thread. Unlike the Bun executable's automatic
+  run-to-completion loop, the Rust host drives work with `async_with!`,
+  `AsyncRuntime::idle`, `Runtime::idle`, or explicit ticks.
+- **Platform support.** The current shared-library build/link workflow is
+  macOS-only (`libbun_embed.dylib`). Bun itself supports more platforms, but
+  rbun's embedding link script has not yet been ported to them.
 
 ## Benchmarks
 
