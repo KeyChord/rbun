@@ -1,0 +1,19 @@
+[package]
+name = "bun_css_jsc"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+bstr.workspace = true
+bun_alloc.workspace = true
+bun_core.workspace = true
+bun_css.workspace = true
+bun_jsc.workspace = true
+bun_ast.workspace = true
+bun_ptr.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "bun_csrf"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+strum.workspace = true
+bun_base64.workspace = true
+bun_core.workspace = true
+bun_sha_hmac.workspace = true
+bun_boringssl_sys.workspace = true

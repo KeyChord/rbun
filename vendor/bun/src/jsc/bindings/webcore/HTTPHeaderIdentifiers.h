@@ -1,0 +1,169 @@
+#pragma once
+
+#include <wtf/Forward.h>
+#include "HTTPHeaderNames.h"
+
+namespace WebCore {
+// clang-format off
+#define HTTP_HEADERS_EACH_NAME(macro)                                                       \
+    macro("accept", Accept)                                                                \
+    macro("accept-charset", AcceptCharset)                                                 \
+    macro("accept-encoding", AcceptEncoding)                                               \
+    macro("accept-language", AcceptLanguage)                                               \
+    macro("accept-ranges", AcceptRanges)                                                   \
+    macro("access-control-allow-credentials", AccessControlAllowCredentials)               \
+    macro("access-control-allow-headers", AccessControlAllowHeaders)                       \
+    macro("access-control-allow-methods", AccessControlAllowMethods)                       \
+    macro("access-control-allow-origin", AccessControlAllowOrigin)                         \
+    macro("access-control-expose-headers", AccessControlExposeHeaders)                     \
+    macro("access-control-max-age", AccessControlMaxAge)                                   \
+    macro("access-control-request-headers", AccessControlRequestHeaders)                   \
+    macro("access-control-request-method", AccessControlRequestMethod)                     \
+    macro("age", Age)                                                                      \
+    macro("authorization", Authorization)                                                  \
+    macro("cache-control", CacheControl)                                                   \
+    macro("connection", Connection)                                                        \
+    macro("content-disposition", ContentDisposition)                                       \
+    macro("content-encoding", ContentEncoding)                                             \
+    macro("content-language", ContentLanguage)                                             \
+    macro("content-length", ContentLength)                                                 \
+    macro("content-location", ContentLocation)                                             \
+    macro("content-range", ContentRange)                                                   \
+    macro("content-security-policy", ContentSecurityPolicy)                                \
+    macro("content-security-policy-report-only", ContentSecurityPolicyReportOnly)          \
+    macro("content-type", ContentType)                                                     \
+    macro("cookie", Cookie)                                                                \
+    macro("cookie2", Cookie2)                                                              \
+    macro("cross-origin-embedder-policy", CrossOriginEmbedderPolicy)                       \
+    macro("cross-origin-embedder-policy-report-only", CrossOriginEmbedderPolicyReportOnly) \
+    macro("cross-origin-opener-policy", CrossOriginOpenerPolicy)                           \
+    macro("cross-origin-opener-policy-report-only", CrossOriginOpenerPolicyReportOnly)     \
+    macro("cross-origin-resource-policy", CrossOriginResourcePolicy)                       \
+    macro("dnt", DNT)                                                                      \
+    macro("date", Date)                                                                    \
+    macro("default-style", DefaultStyle)                                                   \
+    macro("etag", ETag)                                                                    \
+    macro("expect", Expect)                                                                \
+    macro("expires", Expires)                                                              \
+    macro("host", Host)                                                                    \
+    macro("icy-metaint", IcyMetaInt)                                                       \
+    macro("icy-metadata", IcyMetadata)                                                     \
+    macro("if-match", IfMatch)                                                             \
+    macro("if-modified-since", IfModifiedSince)                                            \
+    macro("if-none-match", IfNoneMatch)                                                    \
+    macro("if-range", IfRange)                                                             \
+    macro("if-unmodified-since", IfUnmodifiedSince)                                        \
+    macro("keep-alive", KeepAlive)                                                         \
+    macro("last-event-id", LastEventID)                                                    \
+    macro("last-modified", LastModified)                                                   \
+    macro("link", Link)                                                                    \
+    macro("location", Location)                                                            \
+    macro("origin", Origin)                                                                \
+    macro("ping-from", PingFrom)                                                           \
+    macro("ping-to", PingTo)                                                               \
+    macro("pragma", Pragma)                                                                \
+    macro("proxy-authorization", ProxyAuthorization)                                       \
+    macro("proxy-connection", ProxyConnection)                                             \
+    macro("purpose", Purpose)                                                              \
+    macro("range", Range)                                                                  \
+    macro("referer", Referer)                                                              \
+    macro("referrer-policy", ReferrerPolicy)                                               \
+    macro("refresh", Refresh)                                                              \
+    macro("report-to", ReportTo)                                                           \
+    macro("sec-fetch-dest", SecFetchDest)                                                  \
+    macro("sec-fetch-mode", SecFetchMode)                                                  \
+    macro("sec-websocket-accept", SecWebSocketAccept)                                      \
+    macro("sec-websocket-extensions", SecWebSocketExtensions)                              \
+    macro("sec-websocket-key", SecWebSocketKey)                                            \
+    macro("sec-websocket-protocol", SecWebSocketProtocol)                                  \
+    macro("sec-websocket-version", SecWebSocketVersion)                                    \
+    macro("server-timing", ServerTiming)                                                   \
+    macro("service-worker", ServiceWorker)                                                 \
+    macro("service-worker-allowed", ServiceWorkerAllowed)                                  \
+    macro("service-worker-navigation-preload", ServiceWorkerNavigationPreload)             \
+    macro("set-cookie", SetCookie)                                                         \
+    macro("set-cookie2", SetCookie2)                                                       \
+    macro("sourcemap", SourceMap)                                                          \
+    macro("strict-transport-security", StrictTransportSecurity)                            \
+    macro("te", TE)                                                                        \
+    macro("timing-allow-origin", TimingAllowOrigin)                                        \
+    macro("trailer", Trailer)                                                              \
+    macro("transfer-encoding", TransferEncoding)                                           \
+    macro("upgrade", Upgrade)                                                              \
+    macro("upgrade-insecure-requests", UpgradeInsecureRequests)                            \
+    macro("user-agent", UserAgent)                                                         \
+    macro("vary", Vary)                                                                    \
+    macro("via", Via)                                                                      \
+    macro("x-content-type-options", XContentTypeOptions)                                   \
+    macro("x-dns-prefetch-control", XDNSPrefetchControl)                                   \
+    macro("x-frame-options", XFrameOptions)                                                \
+    macro("x-sourcemap", XSourceMap)                                                       \
+    macro("x-temp-tablet", XTempTablet)                                                    \
+    macro("x-xss-protection", XXSSProtection)
+
+// RFC 9113 pseudo-headers; not header fields, so HTTPHeaderName has no entries for them.
+#define HTTP2_PSEUDO_HEADERS_EACH_NAME(macro) \
+    macro(":authority", Authority)            \
+    macro(":method", Method)                  \
+    macro(":path", Path)                      \
+    macro(":scheme", Scheme)                  \
+    macro(":status", Status)
+// clang-format on
+
+#define HTTP2_PSEUDO_HEADERS_ENUM_ENTRY(literal, name) name,
+
+enum class HTTP2PseudoHeaderName : uint8_t {
+    HTTP2_PSEUDO_HEADERS_EACH_NAME(HTTP2_PSEUDO_HEADERS_ENUM_ENTRY)
+};
+
+#undef HTTP2_PSEUDO_HEADERS_ENUM_ENTRY
+
+bool findHTTP2PseudoHeaderName(WTF::StringView, HTTP2PseudoHeaderName&);
+
+#define HTTP_HEADERS_INDEX_ENTRY(literal, name) name,
+
+#define HTTP_HEADERS_ACCESSOR_DEFINITIONS(literal, name)                                     \
+    JSC::Identifier& name##Identifier(JSC::VM& vm) { return identifierAt(vm, Index::name); } \
+    JSC::JSString* name##String(JSC::JSGlobalObject* g) { return stringAt(g, Index::name); }
+
+// Per-VM cache: one Identifier and one JSString per header name, for the lifetime of the VM.
+class HTTPHeaderIdentifiers {
+public:
+    // clang-format off
+    enum class Index : uint8_t {
+        HTTP_HEADERS_EACH_NAME(HTTP_HEADERS_INDEX_ENTRY)
+        HTTP2_PSEUDO_HEADERS_EACH_NAME(HTTP_HEADERS_INDEX_ENTRY)
+        Count
+    };
+    // clang-format on
+
+    HTTP_HEADERS_EACH_NAME(HTTP_HEADERS_ACCESSOR_DEFINITIONS)
+    HTTP2_PSEUDO_HEADERS_EACH_NAME(HTTP_HEADERS_ACCESSOR_DEFINITIONS)
+
+    HTTPHeaderIdentifiers();
+
+    JSC::Identifier& identifierFor(JSC::VM& vm, HTTPHeaderName name) { return identifierAt(vm, static_cast<size_t>(name)); }
+    JSC::JSString* stringFor(JSC::JSGlobalObject* g, HTTPHeaderName name) { return stringAt(g, static_cast<size_t>(name)); }
+    JSC::Identifier& identifierFor(JSC::VM& vm, HTTP2PseudoHeaderName name) { return identifierAt(vm, PseudoOffset + static_cast<size_t>(name)); }
+    JSC::JSString* stringFor(JSC::JSGlobalObject* g, HTTP2PseudoHeaderName name) { return stringAt(g, PseudoOffset + static_cast<size_t>(name)); }
+
+    template<typename Visitor>
+    void visit(Visitor& visitor);
+
+private:
+    static constexpr size_t Count = static_cast<size_t>(Index::Count);
+    static constexpr size_t PseudoOffset = numHTTPHeaderNames;
+
+    JSC::Identifier& identifierAt(JSC::VM&, size_t);
+    JSC::Identifier& identifierAt(JSC::VM& vm, Index i) { return identifierAt(vm, static_cast<size_t>(i)); }
+    JSC::JSString* stringAt(JSC::JSGlobalObject* g, size_t i) { return m_strings[i].getInitializedOnMainThread(g); }
+    JSC::JSString* stringAt(JSC::JSGlobalObject* g, Index i) { return stringAt(g, static_cast<size_t>(i)); }
+
+    JSC::LazyProperty<JSC::JSGlobalObject, JSC::JSString> m_strings[Count];
+    JSC::Identifier m_identifiers[Count];
+};
+
+} // namespace WebCore
+
+#undef HTTP_HEADERS_INDEX_ENTRY
+#undef HTTP_HEADERS_ACCESSOR_DEFINITIONS

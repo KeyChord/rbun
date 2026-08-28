@@ -1,0 +1,19 @@
+[package]
+name = "bun_exe_format"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+bytemuck = "1"
+thiserror.workspace = true
+strum.workspace = true
+bstr.workspace = true
+bun_core.workspace = true
+bun_sha_hmac.workspace = true
+bun_sys.workspace = true

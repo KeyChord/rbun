@@ -1,0 +1,20 @@
+[package]
+name = "bun_shell_parser"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+strum.workspace = true
+bstr.workspace = true
+libc.workspace = true
+bitflags.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+bun_alloc.workspace = true
+bun_core.workspace = true

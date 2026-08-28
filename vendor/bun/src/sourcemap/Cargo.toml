@@ -1,0 +1,34 @@
+[package]
+name = "bun_sourcemap"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+bun_opaque.workspace = true
+bstr.workspace = true
+smallvec = { workspace = true, features = ["const_generics", "union"] }
+bun_alloc.workspace = true
+bun_base64.workspace = true
+bun_core.workspace = true
+bun_collections.workspace = true
+bun_highway.workspace = true
+bun_parsers.workspace = true
+bun_io.workspace = true
+# bun_js_parser not needed: parse_json uses the T2 value-subset Expr from
+# bun_ast::js_ast (what bun_parsers::json::parse returns).
+# bun_js_printer would create a dep cycle (it depends on bun_sourcemap);
+# quote_for_json moved down to bun_string, so Chunk::print_source_map_contents*
+# is now un-gated without the cycle.
+bun_ast.workspace = true
+bun_paths.workspace = true
+bun_ptr.workspace = true
+bun_semver.workspace = true
+bun_sys.workspace = true
+bun_zstd.workspace = true

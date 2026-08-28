@@ -1,0 +1,16 @@
+[package]
+name = "bun_which"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+bstr.workspace = true
+bun_core.workspace = true
+bun_paths.workspace = true
+bun_sys.workspace = true

@@ -1,0 +1,21 @@
+[package]
+name = "bun_base64"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+strum.workspace = true
+bun_core.workspace = true
+
+thiserror.workspace = true
+
+bun_simdutf_sys.workspace = true
+# `wyhash_url_safe` (CSS-modules hasher) — leaf crates, no cycle.
+bun_wyhash.workspace = true
+bun_alloc.workspace = true
