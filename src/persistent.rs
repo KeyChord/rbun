@@ -15,7 +15,8 @@ pub struct Persistent<T> {
 
 impl<T> Clone for Persistent<T> {
     fn clone(&self) -> Self {
-        // SAFETY: protections are counted; the value is live.
+        // SAFETY: protections are counted; the value is live (immediates are
+        // protected too — harmless and keeps this independent of the encoding).
         unsafe { ffi::JSValueProtect(self.ctx, self.raw) };
         Persistent { raw: self.raw, ctx: self.ctx, _marker: core::marker::PhantomData }
     }

@@ -16,31 +16,33 @@ use std::time::{Duration, Instant};
 
 // ─── Workloads (shared JavaScript) ───────────────────────────────────────
 
-const FIB: &str = r#"
+// Every script is an IIFE: the same source is evaluated many times in one
+// global scope and top-level `let`/`const` would be redeclarations.
+const FIB: &str = r#"(() => {
 function fib(n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }
-fib(22)
-"#;
+return fib(22);
+})()"#;
 
-const SORT: &str = r#"
+const SORT: &str = r#"(() => {
 let seed = 42;
 const arr = Array.from({ length: 20000 }, () => (seed = (seed * 1103515245 + 12345) % 2147483648));
 arr.sort((a, b) => a - b);
-arr[0] + arr[arr.length - 1]
-"#;
+return arr[0] + arr[arr.length - 1];
+})()"#;
 
-const STRINGS: &str = r#"
+const STRINGS: &str = r#"(() => {
 let s = "";
 for (let i = 0; i < 2000; i++) s += i.toString(36) + ",";
-s.split(",").map(x => x.toUpperCase()).join("|").length
-"#;
+return s.split(",").map(x => x.toUpperCase()).join("|").length;
+})()"#;
 
-const OBJECTS: &str = r#"
+const OBJECTS: &str = r#"(() => {
 const objs = [];
 for (let i = 0; i < 5000; i++) objs.push({ id: i, name: "item" + i, tags: [i, i * 2], nested: { ok: i % 2 === 0 } });
-objs.filter(o => o.nested.ok).map(o => o.tags[1]).reduce((a, b) => a + b, 0)
-"#;
+return objs.filter(o => o.nested.ok).map(o => o.tags[1]).reduce((a, b) => a + b, 0);
+})()"#;
 
-const CALL_HOST_LOOP: &str = "let acc = 0; for (let i = 0; i < 1000; i++) acc += host(i); acc";
+const CALL_HOST_LOOP: &str = "(() => { let acc = 0; for (let i = 0; i < 1000; i++) acc += host(i); return acc; })()";
 
 const JSON_DOC: &str = r#"{"users":[{"id":1,"name":"a","tags":["x","y"],"nested":{"k":1.5,"ok":true}},{"id":2,"name":"b","tags":[],"nested":{"k":-2,"ok":false}},{"id":3,"name":"c","tags":["z"],"nested":{"k":0,"ok":true}}],"count":3,"meta":{"page":1,"total":10,"note":"lorem ipsum dolor sit amet"}}"#;
 

@@ -14,7 +14,7 @@ pub struct Atom<'js>(pub(crate) Value<'js>);
 
 impl<'js> Atom<'js> {
     pub fn from_str(ctx: Ctx<'js>, name: &str) -> Result<Self> {
-        Ok(Atom(ctx.string(name)))
+        Ok(Atom(ctx.intern(name)))
     }
 
     /// Any string, symbol or number value.

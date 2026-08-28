@@ -87,6 +87,51 @@ impl fmt::Display for Type {
     }
 }
 
+/// JavaScriptCore's 64-bit NaN-boxing (see `JSCJSValue.h`; Bun's
+/// `JSValue.rs` uses the same constants): immediates (numbers, booleans,
+/// `undefined`, `null`) are encoded in the bits themselves and need no GC
+/// protection; everything else is a cell pointer.
+mod encoding {
+    pub const NUMBER_TAG: usize = 0xfffe_0000_0000_0000;
+    pub const NOT_CELL_MASK: usize = 0xfffe_0000_0000_0002;
+    pub const DOUBLE_ENCODE_OFFSET: usize = 1usize << 49;
+    pub const UNDEFINED: usize = 0xa;
+    pub const NULL: usize = 0x2;
+    pub const TRUE: usize = 0x7;
+    pub const FALSE: usize = 0x6;
+
+    #[inline]
+    pub fn is_cell(bits: usize) -> bool {
+        bits != 0 && (bits & NOT_CELL_MASK) == 0
+    }
+    #[inline]
+    pub fn is_int32(bits: usize) -> bool {
+        (bits & NUMBER_TAG) == NUMBER_TAG
+    }
+    #[inline]
+    pub fn is_number(bits: usize) -> bool {
+        (bits & NUMBER_TAG) != 0
+    }
+    #[inline]
+    pub fn as_number(bits: usize) -> f64 {
+        if is_int32(bits) {
+            (bits as u32 as i32) as f64
+        } else {
+            f64::from_bits((bits.wrapping_sub(DOUBLE_ENCODE_OFFSET)) as u64)
+        }
+    }
+    #[inline]
+    pub fn encode_number(n: f64) -> usize {
+        let as_i32 = n as i32;
+        if as_i32 as f64 == n && !(n == 0.0 && n.is_sign_negative()) {
+            NUMBER_TAG | (as_i32 as u32 as usize)
+        } else {
+            let n = if n.is_nan() { f64::NAN } else { n };
+            (n.to_bits() as usize).wrapping_add(DOUBLE_ENCODE_OFFSET)
+        }
+    }
+}
+
 pub struct Value<'js> {
     pub(crate) ctx: Ctx<'js>,
     pub(crate) raw: ffi::JSValueRef,
@@ -101,8 +146,10 @@ impl<'js> Value<'js> {
         } else {
             raw
         };
-        // SAFETY: `raw` is a live value on the current (locked) context.
-        unsafe { ffi::JSValueProtect(ctx.raw(), raw) };
+        if encoding::is_cell(raw as usize) {
+            // SAFETY: `raw` is a live cell on the current (locked) context.
+            unsafe { ffi::JSValueProtect(ctx.raw(), raw) };
+        }
         Value { ctx, raw }
     }
 
@@ -121,13 +168,11 @@ impl<'js> Value<'js> {
     }
 
     pub fn new_undefined(ctx: Ctx<'js>) -> Self {
-        // SAFETY: valid context.
-        unsafe { Value::from_raw(ctx, ffi::JSValueMakeUndefined(ctx.raw())) }
+        Value { ctx, raw: encoding::UNDEFINED as ffi::JSValueRef }
     }
 
     pub fn new_null(ctx: Ctx<'js>) -> Self {
-        // SAFETY: valid context.
-        unsafe { Value::from_raw(ctx, ffi::JSValueMakeNull(ctx.raw())) }
+        Value { ctx, raw: encoding::NULL as ffi::JSValueRef }
     }
 
     /// Alias of [`new_undefined`](Self::new_undefined) (QuickJS' uninitialized
@@ -137,8 +182,7 @@ impl<'js> Value<'js> {
     }
 
     pub fn new_bool(ctx: Ctx<'js>, value: bool) -> Self {
-        // SAFETY: valid context.
-        unsafe { Value::from_raw(ctx, ffi::JSValueMakeBoolean(ctx.raw(), value)) }
+        Value { ctx, raw: (if value { encoding::TRUE } else { encoding::FALSE }) as ffi::JSValueRef }
     }
 
     pub fn new_int(ctx: Ctx<'js>, value: i32) -> Self {
@@ -150,8 +194,7 @@ impl<'js> Value<'js> {
     }
 
     pub fn new_number(ctx: Ctx<'js>, value: f64) -> Self {
-        // SAFETY: valid context.
-        unsafe { Value::from_raw(ctx, ffi::JSValueMakeNumber(ctx.raw(), value)) }
+        Value { ctx, raw: encoding::encode_number(value) as ffi::JSValueRef }
     }
 
     pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Self {
@@ -191,6 +234,16 @@ impl<'js> Value<'js> {
     }
 
     fn raw_type(&self) -> ffi::JSType {
+        let bits = self.raw as usize;
+        if encoding::is_number(bits) {
+            return ffi::kJSTypeNumber;
+        }
+        match bits {
+            encoding::UNDEFINED => return ffi::kJSTypeUndefined,
+            encoding::NULL => return ffi::kJSTypeNull,
+            encoding::TRUE | encoding::FALSE => return ffi::kJSTypeBoolean,
+            _ => {}
+        }
         // SAFETY: live value.
         unsafe { ffi::JSValueGetType(self.ctx.raw(), self.raw) }
     }
@@ -201,12 +254,7 @@ impl<'js> Value<'js> {
             ffi::kJSTypeNull => Type::Null,
             ffi::kJSTypeBoolean => Type::Bool,
             ffi::kJSTypeNumber => {
-                let n = self.as_number().unwrap_or(f64::NAN);
-                if n.fract() == 0.0 && n.abs() <= (i32::MAX as f64) && !(n == 0.0 && n.is_sign_negative()) {
-                    Type::Int
-                } else {
-                    Type::Float
-                }
+                if encoding::is_int32(self.raw as usize) { Type::Int } else { Type::Float }
             }
             ffi::kJSTypeString => Type::String,
             ffi::kJSTypeSymbol => Type::Symbol,
@@ -233,28 +281,28 @@ impl<'js> Value<'js> {
     }
 
     pub fn is_undefined(&self) -> bool {
-        self.raw_type() == ffi::kJSTypeUndefined
+        self.raw as usize == encoding::UNDEFINED
     }
     pub fn is_uninitialized(&self) -> bool {
         false
     }
     pub fn is_null(&self) -> bool {
-        self.raw_type() == ffi::kJSTypeNull
+        self.raw as usize == encoding::NULL
     }
     pub fn is_undefined_or_null(&self) -> bool {
-        matches!(self.raw_type(), ffi::kJSTypeUndefined | ffi::kJSTypeNull)
+        (self.raw as usize | 0x8) == 0xa
     }
     pub fn is_bool(&self) -> bool {
-        self.raw_type() == ffi::kJSTypeBoolean
+        matches!(self.raw as usize, encoding::TRUE | encoding::FALSE)
     }
     pub fn is_number(&self) -> bool {
-        self.raw_type() == ffi::kJSTypeNumber
+        encoding::is_number(self.raw as usize)
     }
     pub fn is_int(&self) -> bool {
-        self.type_of() == Type::Int
+        encoding::is_int32(self.raw as usize)
     }
     pub fn is_float(&self) -> bool {
-        self.type_of() == Type::Float
+        self.is_number() && !self.is_int()
     }
     pub fn is_string(&self) -> bool {
         self.raw_type() == ffi::kJSTypeString
@@ -310,21 +358,23 @@ impl<'js> Value<'js> {
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        // SAFETY: live value.
-        self.is_bool().then(|| unsafe { ffi::JSValueToBoolean(self.ctx.raw(), self.raw) })
+        match self.raw as usize {
+            encoding::TRUE => Some(true),
+            encoding::FALSE => Some(false),
+            _ => None,
+        }
     }
 
     pub fn as_number(&self) -> Option<f64> {
-        if !self.is_number() {
-            return None;
-        }
-        let mut exception: ffi::JSValueRef = core::ptr::null();
-        // SAFETY: live value.
-        let n = unsafe { ffi::JSValueToNumber(self.ctx.raw(), self.raw, &mut exception) };
-        exception.is_null().then_some(n)
+        let bits = self.raw as usize;
+        encoding::is_number(bits).then(|| encoding::as_number(bits))
     }
 
     pub fn as_int(&self) -> Option<i32> {
+        let bits = self.raw as usize;
+        if encoding::is_int32(bits) {
+            return Some(bits as u32 as i32);
+        }
         self.as_number().filter(|n| n.fract() == 0.0 && n.abs() <= i32::MAX as f64).map(|n| n as i32)
     }
 
@@ -462,16 +512,20 @@ impl<'js> Value<'js> {
 
 impl Clone for Value<'_> {
     fn clone(&self) -> Self {
-        // SAFETY: live value; protections are counted.
-        unsafe { ffi::JSValueProtect(self.ctx.raw(), self.raw) };
+        if encoding::is_cell(self.raw as usize) {
+            // SAFETY: live cell; protections are counted.
+            unsafe { ffi::JSValueProtect(self.ctx.raw(), self.raw) };
+        }
         Value { ctx: self.ctx, raw: self.raw }
     }
 }
 
 impl Drop for Value<'_> {
     fn drop(&mut self) {
-        // SAFETY: balances the protect taken in `from_raw` / `clone`.
-        unsafe { ffi::JSValueUnprotect(self.ctx.raw(), self.raw) };
+        if encoding::is_cell(self.raw as usize) {
+            // SAFETY: balances the protect taken in `from_raw` / `clone`.
+            unsafe { ffi::JSValueUnprotect(self.ctx.raw(), self.raw) };
+        }
     }
 }
 
@@ -1365,16 +1419,15 @@ impl<'js> FromJs<'js> for () {
 }
 impl<'js> FromJs<'js> for bool {
     fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        value.as_bool().ok_or_else(|| Error::new_from_js(type_name, "bool"))
+        value.as_bool().ok_or_else(|| Error::new_from_js(value.type_name(), "bool"))
     }
 }
 impl<'js> FromJs<'js> for f64 {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        if value.is_number() {
-            return value.as_number().ok_or_else(|| Error::new_from_js(type_name, "f64"));
+        if let Some(n) = value.as_number() {
+            return Ok(n);
         }
+        let type_name = value.type_name();
         if value.is_big_int() {
             let mut exception: ffi::JSValueRef = core::ptr::null();
             // SAFETY: live value.
@@ -1398,6 +1451,9 @@ macro_rules! from_js_int {
         impl<'js> FromJs<'js> for $t {
             fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                 let type_name = value.type_name();
+                if let Some(i) = (value.is_int()).then(|| value.raw as usize as u32 as i32) {
+                    return <$t>::try_from(i).map_err(|_| Error::new_from_js(type_name, stringify!($t)));
+                }
                 if value.is_big_int() {
                     let big = BigInt(value);
                     return <$t>::try_from(big.to_i64()?).map_err(|_| Error::new_from_js("big_int", stringify!($t)));

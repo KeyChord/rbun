@@ -77,7 +77,16 @@ pub(crate) struct RuntimeInner {
     pub(crate) deferred: RefCell<VecDeque<DeferredJob>>,
     pub(crate) rejection_tracker: RefCell<Option<RejectionTracker>>,
     info: RefCell<Option<std::string::String>>,
+    /// `__rbun.<name>` helper functions, rooted for the runtime's lifetime.
+    helpers: RefCell<HashMap<&'static str, ffi::JSValueRef>>,
+    /// Interned JS strings for short property keys (see [`Ctx::intern`]).
+    atoms: RefCell<HashMap<Box<str>, ffi::JSValueRef>>,
 }
+
+/// Upper bounds for the interned-key cache: keys longer than this are not
+/// cached, and the cache stops growing once full.
+const INTERN_MAX_KEY_LEN: usize = 64;
+const INTERN_MAX_ENTRIES: usize = 4096;
 
 /// The embedded Bun VM.
 #[derive(Clone)]
@@ -136,6 +145,8 @@ impl Runtime {
             deferred: RefCell::new(VecDeque::new()),
             rejection_tracker: RefCell::new(None),
             info: RefCell::new(None),
+            helpers: RefCell::new(HashMap::new()),
+            atoms: RefCell::new(HashMap::new()),
         });
         CURRENT.with(|c| c.set(Rc::as_ptr(&inner)));
         THREAD_RUNTIME.with(|r| *r.borrow_mut() = Some(inner.clone()));
@@ -779,9 +790,40 @@ impl<'js> Ctx<'js> {
     // ─── Internals ───
 
     /// A helper function from the bootstrap script (`__rbun.<name>`).
-    pub(crate) fn function(&self, name: &str) -> Result<Function<'js>> {
+    pub(crate) fn function(&self, name: &'static str) -> Result<Function<'js>> {
+        if let Some(&raw) = self.inner.helpers.borrow().get(name) {
+            // SAFETY: rooted below for the runtime's lifetime.
+            return Ok(Function(Object(unsafe { Value::from_raw(*self, raw) })));
+        }
         let rbun: Object<'js> = self.globals().get("__rbun")?;
-        rbun.get(name)
+        let function: Function<'js> = rbun.get(name)?;
+        let raw = function.as_raw();
+        // Leak one protection so the cached raw pointer stays valid.
+        core::mem::forget(function.clone());
+        self.inner.helpers.borrow_mut().insert(name, raw);
+        Ok(function)
+    }
+
+    /// A JS string for `name`, served from a per-runtime cache for short
+    /// keys so repeated property access does not re-encode and re-allocate
+    /// the key each time (rquickjs interns atoms the same way).
+    pub fn intern(&self, name: &str) -> Value<'js> {
+        if name.len() <= INTERN_MAX_KEY_LEN {
+            if let Some(&raw) = self.inner.atoms.borrow().get(name) {
+                // SAFETY: rooted below for the runtime's lifetime.
+                return unsafe { Value::from_raw(*self, raw) };
+            }
+        }
+        let value = self.string(name);
+        if name.len() <= INTERN_MAX_KEY_LEN {
+            let mut atoms = self.inner.atoms.borrow_mut();
+            if atoms.len() < INTERN_MAX_ENTRIES {
+                // Leak one protection so the cached raw pointer stays valid.
+                core::mem::forget(value.clone());
+                atoms.insert(name.into(), value.as_raw());
+            }
+        }
+        value
     }
 }
 

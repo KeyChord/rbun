@@ -89,6 +89,43 @@ Deviations:
   / `set_max_stack_size` (accepted, ignored — spawn the JS thread with the
   stack size you need).
 
+## Benchmarks
+
+`cargo bench` runs `benches/compare.rs`, a criterion suite that drives
+rquickjs 0.11 and rbun through the same workloads (each engine on its own
+thread; rbun's one-time VM boot is printed once and excluded). Numbers below
+are from an Apple Silicon Mac, `--profile=release` Bun, 30 samples × 3 s; the
+last column is rbun's time relative to rquickjs (lower is better).
+
+| Benchmark | What it measures | rquickjs | rbun | rbun / rquickjs |
+| --- | --- | ---: | ---: | ---: |
+| `runtime_create` | `Runtime::new` + `Context::full` | 128 µs | — (one-time ≈3 ms boot, then a no-op) | n/a |
+| `eval_expression` | `ctx.eval::<i32>("1 + 1")` | 1.86 µs | 1.02 µs | 0.55× |
+| `call_js_function/1000` | 1000 × `Function::call((i,))` from Rust | 59 µs | 118 µs | 2.0× |
+| `call_host_function` | JS loop calling a `Func` 1000 times | 73 µs | 98 µs | 1.3× |
+| `object_properties` | 1000 × (`set` ×2 + `get` ×2) on one object | 138 µs | 735 µs | 5.3× |
+| `json_roundtrip` | `json_parse` + `json_stringify` of a small doc | 14.9 µs | 3.6 µs | 0.24× |
+| `script_fib_22` | recursive `fib(22)` | 1.58 ms | 0.35 ms | 0.22× |
+| `script_sort_20k` | `Array.prototype.sort` of 20 000 numbers | 10.5 ms | 4.9 ms | 0.46× |
+| `script_strings` | 2000 concatenations + split/map/join | 725 µs | 330 µs | 0.45× |
+| `script_objects` | 5000 object literals + filter/map/reduce | 4.02 ms | 0.69 ms | 0.17× |
+| `module_evaluate` | declare + evaluate a tiny ES module | 8.5 µs | 27 µs | 3.2× |
+| `promise_roundtrip/200` | 200 × resolve a JS promise from Rust and await it | 162 µs | 73 µs | 0.45× |
+
+Reading the table:
+
+- Anything that runs *inside* JS (scripts, JSON, promises) is 2–6× faster on
+  rbun thanks to JavaScriptCore's JIT.
+- Crossing the Rust ↔ JS boundary is slower on rbun. Values are NaN-boxed so
+  numbers/booleans/`undefined` never touch the FFI, `this`/callee are only
+  GC-rooted on demand and short property keys are interned, but each call
+  still goes through the JavaScriptCore C API (`JSObjectCallAsFunction`,
+  `JSObjectGetPropertyForKey`) and `Object::set` goes through a strict-mode
+  JS helper so read-only assignments throw like they do in rquickjs. Property
+  access is the biggest remaining gap.
+- `module_evaluate` pays for the Bun module-loader round trip (`Bun.plugin`
+  `onResolve`/`onLoad`) instead of QuickJS's in-process module table.
+
 ## Layout
 
 - `src/` — the crate (`ffi.rs` is the JavaScriptCore C API + `bun_embed_*`).

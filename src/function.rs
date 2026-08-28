@@ -229,16 +229,52 @@ impl_into_args!(A, B, C, D, E, G, H, I);
 /// The arguments of a call into a host function.
 pub struct Params<'js> {
     ctx: Ctx<'js>,
-    this: Value<'js>,
-    function: Value<'js>,
+    this: LazyValue<'js>,
+    function: LazyValue<'js>,
     new_target: Value<'js>,
     args: Vec<Value<'js>>,
     index: usize,
 }
 
+/// A value JSC keeps alive for the duration of a host call, rooted by us
+/// only when a callback actually asks for it (`this` / `function`).
+struct LazyValue<'js> {
+    raw: ffi::JSValueRef,
+    value: std::cell::OnceCell<Value<'js>>,
+}
+
+impl<'js> LazyValue<'js> {
+    fn owned(value: Value<'js>) -> Self {
+        let raw = value.as_raw();
+        LazyValue { raw, value: std::cell::OnceCell::from(value) }
+    }
+
+    /// # Safety
+    /// `raw` must stay alive for as long as the `LazyValue` does.
+    unsafe fn borrowed(raw: ffi::JSValueRef) -> Self {
+        LazyValue { raw, value: std::cell::OnceCell::new() }
+    }
+
+    fn get(&self, ctx: Ctx<'js>) -> &Value<'js> {
+        // SAFETY: `raw` is live per the `borrowed` contract.
+        self.value.get_or_init(|| unsafe { Value::from_raw(ctx, self.raw) })
+    }
+}
+
 impl<'js> Params<'js> {
     pub fn new(ctx: Ctx<'js>, this: Value<'js>, function: Value<'js>, args: Vec<Value<'js>>) -> Self {
         let new_target = Value::new_undefined(ctx);
+        Params { ctx, this: LazyValue::owned(this), function: LazyValue::owned(function), new_target, args, index: 0 }
+    }
+
+    /// # Safety
+    /// `this` and `function` must stay alive for the lifetime of the `Params`
+    /// (they do inside a host-function callback: JSC holds them on the
+    /// calling frame).
+    pub(crate) unsafe fn from_borrowed(ctx: Ctx<'js>, this: ffi::JSValueRef, function: ffi::JSValueRef, args: Vec<Value<'js>>) -> Self {
+        let new_target = Value::new_undefined(ctx);
+        // SAFETY: forwarded from the caller.
+        let (this, function) = unsafe { (LazyValue::borrowed(this), LazyValue::borrowed(function)) };
         Params { ctx, this, function, new_target, args, index: 0 }
     }
 
@@ -252,11 +288,11 @@ impl<'js> Params<'js> {
     }
 
     pub fn this(&self) -> &Value<'js> {
-        &self.this
+        self.this.get(self.ctx)
     }
 
     pub fn function(&self) -> &Value<'js> {
-        &self.function
+        self.function.get(self.ctx)
     }
 
     pub fn new_target(&self) -> &Value<'js> {
@@ -282,18 +318,19 @@ impl<'js> Params<'js> {
 
     /// Take the next argument, if any.
     pub fn take(&mut self) -> Option<Value<'js>> {
-        let value = self.args.get(self.index).cloned();
-        if value.is_some() {
-            self.index += 1;
-        }
-        value
+        let slot = self.args.get_mut(self.index)?;
+        // Move the argument out (each is handed to exactly one parameter)
+        // rather than cloning it, which would re-root it in the GC.
+        let value = core::mem::replace(slot, Value::new_undefined(self.ctx));
+        self.index += 1;
+        Some(value)
     }
 
     /// Take all remaining arguments.
     pub fn take_rest(&mut self) -> Vec<Value<'js>> {
-        let rest = self.args[self.index.min(self.args.len())..].to_vec();
+        let start = self.index.min(self.args.len());
         self.index = self.args.len();
-        rest
+        self.args.drain(start..).collect()
     }
 
     pub fn check_params(&self, requirement: ParamRequirement) -> Result<()> {
@@ -572,12 +609,11 @@ pub(crate) unsafe extern "C" fn host_function_trampoline(
     let args: Vec<Value<'static>> = (0..argument_count)
         .map(|i| unsafe { Value::from_raw(ctx, *arguments.add(i)) })
         .collect();
-    // SAFETY: `this_object` / `function` are live (null → undefined).
-    let this = unsafe { Value::from_raw(ctx, this_object as ffi::JSValueRef) };
-    // SAFETY: as above.
-    let function = unsafe { Value::from_raw(ctx, function as ffi::JSValueRef) };
+    // SAFETY: `this_object` / `function` stay alive on JSC's calling frame
+    // until we return, so `Params` roots them only on demand.
+    let params = unsafe { Params::from_borrowed(ctx, this_object as ffi::JSValueRef, function as ffi::JSValueRef, args) };
 
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(Params::new(ctx, this, function, args))));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(params)));
     let result = match result {
         Ok(result) => result,
         Err(payload) => {
