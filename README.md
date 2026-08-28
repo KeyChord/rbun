@@ -35,18 +35,25 @@ async fn main() -> rbun::Result<()> {
 
 ## Building
 
-rbun links `vendor/bun/build/release/libbun_embed.dylib`, built from the
-vendored Bun checkout. The checkout is upstream plus a small set of patches
-maintained as a JSSG codemod in [`vendor-patches/`](vendor-patches/README.md)
-(`bun.gen.patch` there is the reviewable diff):
+rbun links `com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib`.
+Pristine upstream Bun is pinned as the `com/github/oven-sh/bun/src` Git
+submodule; [`_vendor.ts`](com/github/oven-sh/bun/_vendor.ts) copies it into the
+ignored `dist/` tree and applies the JSSG patch configuration from
+[`dev/improve/rbun/configs/patching/`](dev/improve/rbun/configs/patching/README.md).
+The generated `bun.gen.patch` there is the reviewable source-to-dist diff.
 
 ```sh
 # macOS prerequisites
 brew install llvm@21 automake ccache cmake coreutils gnu-sed go icu4c libiconv libtool ninja pkg-config ruby
 curl -fsSL https://bun.com/install | bash          # a release bun drives bun's build
-scripts/build-bun.sh                                # ~20 min cold; installs the pinned nightly via rustup
+git submodule update --init --recursive
+bun install                                          # links _vendor, _build-bun, _run-upstream-bun-tests in node_modules/.bin
+_build-bun                                           # ~20 min cold; installs the pinned nightly via rustup
 cargo test                                           # Rust API + Bun differential compatibility suites
 ```
+
+`_build-bun` runs `_vendor generate` before building, so a normal
+build always consumes the pinned submodule plus the declared patches.
 
 `RBUN_BUN_LIB_DIR` overrides where the dylib is looked up. Binaries that link
 rbun need an rpath to it (rbun's own examples/tests get one; a dependent
@@ -55,18 +62,19 @@ crate's `build.rs` can read `DEP_BUN_EMBED_LIB_DIR`).
 ### Upgrading Bun
 
 ```sh
-bun vendor-patches/generate.ts upgrade <sha|tag|branch>   # re-vendor + re-apply the patches
-scripts/build-bun.sh && cargo test
+_vendor update <sha|tag|branch>
+_build-bun && cargo test
 ```
 
 If an upstream change moved one of the patch anchors the codemod fails loudly
-(`JSSG patch anchor drifted`); fix `vendor-patches/codemods/bun/codemod.ts`
-and its fixtures, then re-run `bun vendor-patches/generate.ts apply`. See
-[`vendor-patches/README.md`](vendor-patches/README.md).
+(`JSSG patch anchor drifted`); fix
+`dev/improve/rbun/configs/patching/codemods/bun/codemod.ts` and its fixtures,
+then regenerate. Commit the changed submodule gitlink along with the patch
+updates. See the [patching README](dev/improve/rbun/configs/patching/README.md).
 
 ## Compatibility with rquickjs
 
-The test suite in `tests/` ports the applicable public-API tests from
+The test suite in `crates/rbun/tests/` ports the applicable public-API tests from
 `rquickjs-core` 0.11.0. Tests behind rquickjs-only optional features, such as
 its custom allocator and `parallel` modes, are outside the port's scope.
 
@@ -99,7 +107,7 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
   the VM down. Every `Runtime::new()` on a thread returns a handle to that VM
   and every `Context` refers to the same global object, so state (globals,
   declared modules, user data) is shared. Run JS on a dedicated thread with a
-  large stack (16 MB works well) and send work to it, as `tests/common` does.
+  large stack (16 MB works well) and send work to it, as `crates/rbun/tests/common` does.
 - **`Persistent::restore` never fails with `UnrelatedRuntime`** (there is no
   unrelated runtime).
 - **GC:** every Rust-held value is protected for its lifetime, so values can
@@ -190,22 +198,22 @@ file and returns Bun's native pass/fail/skip/todo/assertion counters. The
 when an upstream test calls `bunExe()`, runtime-only script and `-e` children
 are routed back through that same embedded rbun host.
 
-The upstream harness checks out the exact SHA in `VENDORED_COMMIT`, runs each
-unchanged file once with that revision's Bun and once with embedded rbun, and
-requires both success plus identical summary counters:
+The upstream harness reads unchanged tests directly from the pinned `src/`
+submodule, runs each file once with the matching Bun built in `dist/` and once
+with embedded rbun, and requires both success plus identical summary counters:
 
 ```sh
-bun scripts/bun-upstream-tests.ts sync
-bun scripts/bun-upstream-tests.ts classify
+_run-upstream-bun-tests sync
+_run-upstream-bun-tests classify
 
-bun scripts/bun-upstream-tests.ts run image
-bun scripts/bun-upstream-tests.ts run webview-webkit       # macOS/WebKit
-bun scripts/bun-upstream-tests.ts run runtime-smoke
-bun scripts/bun-upstream-tests.ts run runtime-subprocess-smoke
+_run-upstream-bun-tests run image
+_run-upstream-bun-tests run webview-webkit       # macOS/WebKit
+_run-upstream-bun-tests run runtime-smoke
+_run-upstream-bun-tests run runtime-subprocess-smoke
 
 # Broad, environment-dependent sweeps; optional substring narrows either set.
-bun scripts/bun-upstream-tests.ts run portable-runtime [substring]
-bun scripts/bun-upstream-tests.ts run runtime-subprocess [substring]
+_run-upstream-bun-tests run portable-runtime [substring]
+_run-upstream-bun-tests run runtime-subprocess [substring]
 ```
 
 At pinned revision `69c613875`, classification finds 1,021 Bun/Node/Web test
@@ -263,16 +271,16 @@ Reading the table:
 
 ## Layout
 
-- `src/` — the crate (`ffi.rs` is the JavaScriptCore C API + `bun_embed_*`).
+- `crates/rbun/` — library, integration tests, examples, and host binaries
+  (`rbun-test-host`, `rbun-compat-host`).
+- `crates/rbun-macros/` — `#[rbun::class]`, `#[rbun::methods]`.
 - `compat/` — hermetic fixtures, the exact expected-deviation manifest, and
   pinned upstream-suite selection/classification policy.
-- `macros/` — `#[rbun::class]`, `#[rbun::methods]`.
-- `vendor/bun/` — Bun at the commit in `VENDORED_COMMIT` (tests/benchmarks
-  dropped) with the patches from `vendor-patches/` applied: `src/runtime/embed.rs`
-  (the embedding C ABI) and `scripts/embed-dylib.ts` (links
-  `libbun_embed.dylib`) are added, `src/runtime/lib.rs` and
-  `src/bundler/transpiler.rs` are edited. Never hand-edit these in `vendor/`;
-  change the codemod / `files/` and re-apply.
-- `vendor-patches/` — the JSSG codemod, the added files, the generator that
-  (re)vendors Bun and applies them, and the generated `bun.gen.patch`.
-- `tests/` — the ported rquickjs-core tests and Bun differential runner.
+- `com/github/oven-sh/bun/src/` — pristine Bun pinned as a Git submodule;
+  upstream tests and the source revision come directly from this tree.
+- `com/github/oven-sh/bun/dist/` — ignored generated build input and local Bun
+  artifacts. `_vendor` recreates it from `src/`, then adds the embedding C
+  ABI/linker files and applies the two source transformations.
+- `dev/improve/rbun/configs/patching/` — canonical JSSG codemod, added files,
+  fixtures, dependencies, and generated `bun.gen.patch` review diff.
+- `dev/improve/rbun/configs/bun/` — `_build-bun` and upstream test harness bins.

@@ -1,0 +1,9 @@
+{
+  "name": "@rbun/com.github.oven-sh.bun",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "_vendor": "./_vendor.ts"
+  }
+}

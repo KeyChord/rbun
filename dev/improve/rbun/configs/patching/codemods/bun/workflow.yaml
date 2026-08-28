@@ -1,0 +1,27 @@
+version: "1"
+
+# This workflow is normally not executed by the codemod CLI directly — it is
+# driven by `com/github/oven-sh/bun/_vendor.ts`, which copies the pinned Bun
+# submodule from `src/` to generated `dist/`, copies the `files/` tree, runs
+# this JSSG codemod against each bundle listed in `patch.json`, and writes the
+# review diff under `dev/improve/rbun/configs/patching`. The node
+# below mirrors that orchestration so the transformation can also be run in
+# isolation against an arbitrary Bun checkout:
+#
+#   bunx codemod jssg run --target <file> -l rust ./codemod.ts
+#
+# Or against this package's fixtures via:
+#
+#   bun run test
+nodes:
+  - id: patch-runtime
+    name: "Mount bun_embed and forward bare specifiers to plugins"
+    type: automatic
+    steps:
+      - name: "Run JSSG codemod"
+        js-ast-grep:
+          js_file: "codemod.ts"
+          language: "rust"
+          include:
+            - "com/github/oven-sh/bun/dist/src/runtime/lib.rs"
+            - "com/github/oven-sh/bun/dist/src/bundler/transpiler.rs"

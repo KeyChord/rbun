@@ -1,0 +1,20 @@
+{
+  "name": "@rbun/-",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "dev/improve/rbun/**",
+      "com/github/oven-sh/bun"
+    ],
+    "catalog": {
+      "@codemod.com/jssg-types": "^1.6.2",
+      "codemod": "^1.15.3"
+    }
+  },
+  "dependencies": {
+    "@rbun/com.github.oven-sh.bun": "workspace:*",
+    "@rbun/dev.improve.rbun.configs.bun.build": "workspace:*",
+    "@rbun/dev.improve.rbun.configs.bun.testing": "workspace:*"
+  }
+}

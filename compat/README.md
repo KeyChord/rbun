@@ -3,8 +3,9 @@
 This suite runs the same fixture in two fresh processes and compares the
 observable result:
 
-1. `vendor/bun/build/release/bun` from `vendor/bun/VENDORED_COMMIT`, using
-   `reference-driver.mjs` to dynamically import the fixture.
+1. `com/github/oven-sh/bun/dist/build/release/bun`, built from the pristine
+   Bun submodule at `com/github/oven-sh/bun/src`, using `reference-driver.mjs`
+   to dynamically import the fixture.
 2. `rbun-compat-host`, which initializes rbun through its production
    `Runtime` / `Module::import` path, waits for module evaluation and event-loop
    work, and mirrors `process.exitCode`.
@@ -19,13 +20,13 @@ Only CRLF and the two different temporary-root paths are normalized.
 Build the vendored Bun and dylib first, then run:
 
 ```sh
-scripts/build-bun.sh
+_build-bun
 cargo test --test bun_compat -- --nocapture
 ```
 
-The test verifies that the reference executable's revision matches
-`VENDORED_COMMIT`. These environment variables are available for focused or
-external runs:
+The test verifies that the reference executable's revision matches the Bun
+source submodule's current commit. These environment variables are available
+for focused or external runs:
 
 ```sh
 RBUN_COMPAT_FILTER=modules/ cargo test --test bun_compat -- --nocapture
@@ -55,7 +56,7 @@ dependency and fixture inside that case directory. Tests should be ordinary
 JS/TS modules and can use `node:assert/strict`; do not import `bun:test`,
 because that module requires Bun's special test-runner VM rather than the
 production runtime being compared here. Native `bun:test` coverage is handled
-separately by `../scripts/bun-upstream-tests.ts`. Prefer deterministic output
+separately by `_run-upstream-bun-tests`. Prefer deterministic output
 and hermetic local resources.
 
 When adapting an upstream Bun test, copy its runtime assertion and minimal
@@ -86,25 +87,25 @@ loop behavior, I/O, exceptions, and observable process state. Bun CLI commands
 parsing, watch mode) are not part of rbun's embedding contract. The native
 single-file test runner is covered by the pinned upstream suites below.
 Rust-to-JavaScript conversion, callbacks, GC rooting, custom loaders, and host
-futures remain covered by the Rust-facing tests in `../tests/` because the Bun
+futures remain covered by the Rust-facing tests in `../crates/rbun/tests/` because the Bun
 executable has no comparable API.
 
 ## Pinned upstream runtime suites
 
-`../scripts/bun-upstream-tests.ts` is the complementary native-`bun:test`
-harness. It sparse-checks out `test/` from the exact commit recorded in
-`../vendor/bun/VENDORED_COMMIT`, then executes unchanged upstream files under
-both that commit's Bun executable and rbun's embedded test VM. A file passes
-only when both processes succeed and their pass/fail/skip/todo, assertion,
-file, and unhandled-error counts match exactly.
+`_run-upstream-bun-tests` is the complementary native-`bun:test`
+harness. It reads `test/` directly from the pinned pristine Bun submodule,
+then executes unchanged upstream files under both the matching Bun executable
+from generated `dist/` and rbun's embedded test VM. A file passes only when
+both processes succeed and their pass/fail/skip/todo, assertion, file, and
+unhandled-error counts match exactly.
 
 ```sh
-bun scripts/bun-upstream-tests.ts sync
-bun scripts/bun-upstream-tests.ts classify
-bun scripts/bun-upstream-tests.ts run image
-bun scripts/bun-upstream-tests.ts run webview-webkit
-bun scripts/bun-upstream-tests.ts run runtime-smoke
-bun scripts/bun-upstream-tests.ts run runtime-subprocess-smoke
+_run-upstream-bun-tests sync
+_run-upstream-bun-tests classify
+_run-upstream-bun-tests run image
+_run-upstream-bun-tests run webview-webkit
+_run-upstream-bun-tests run runtime-smoke
+_run-upstream-bun-tests run runtime-subprocess-smoke
 ```
 
 The two broad suites are `portable-runtime` (no visible `bunExe()` call) and

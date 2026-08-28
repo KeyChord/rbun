@@ -1,0 +1,10 @@
+{
+  "name": "@rbun/dev.improve.rbun.configs.patching",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@codemod.com/jssg-types": "catalog:",
+    "codemod": "catalog:"
+  }
+}

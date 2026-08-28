@@ -1,0 +1,9 @@
+{
+  "name": "@rbun/dev.improve.rbun.configs.bun.build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "_build-bun": "./_build-bun.ts"
+  }
+}

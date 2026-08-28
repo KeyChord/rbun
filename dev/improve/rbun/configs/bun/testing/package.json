@@ -1,0 +1,9 @@
+{
+  "name": "@rbun/dev.improve.rbun.configs.bun.testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "_run-upstream-bun-tests": "./_run-upstream-bun-tests.ts"
+  }
+}
