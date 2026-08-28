@@ -1,0 +1,23 @@
+{
+  "$schema": 1,
+  "cases": {
+    "process/identity": {
+      "reason": "An embedder is the process entry point: process.execPath/argv identify the Rust host and Bun.main is rbun's synthetic resolution anchor.",
+      "fields": {
+        "stdout": {
+          "reference": "{\"argvLength\":3,\"bunMainIsReferenceDriver\":true,\"bunMainIsRbunHost\":false,\"execPathIsBun\":true,\"importMetaMain\":false}\n",
+          "candidate": "{\"argvLength\":2,\"bunMainIsReferenceDriver\":false,\"bunMainIsRbunHost\":true,\"execPathIsBun\":false,\"importMetaMain\":false}\n"
+        }
+      }
+    },
+    "process/lifecycle": {
+      "reason": "Runtime::idle drains work for a continuing host; unlike Bun's one-shot CLI it does not emit process beforeExit/exit events.",
+      "fields": {
+        "stdout": {
+          "reference": "body\nbeforeExit:0\nexit:0\n",
+          "candidate": "body\n"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "base": 40,
+  "increment": 2,
+  "nested": {
+    "enabled": true
+  }
+}

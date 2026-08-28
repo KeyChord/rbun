@@ -44,7 +44,7 @@ maintained as a JSSG codemod in [`vendor-patches/`](vendor-patches/README.md)
 brew install llvm@21 automake ccache cmake coreutils gnu-sed go icu4c libiconv libtool ninja pkg-config ruby
 curl -fsSL https://bun.com/install | bash          # a release bun drives bun's build
 scripts/build-bun.sh                                # ~20 min cold; installs the pinned nightly via rustup
-cargo test                                           # the ported rquickjs test suite
+cargo test                                           # Rust API + Bun differential compatibility suites
 ```
 
 `RBUN_BUN_LIB_DIR` overrides where the dylib is looked up. Binaries that link
@@ -153,6 +153,23 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
   macOS-only (`libbun_embed.dylib`). Bun itself supports more platforms, but
   rbun's embedding link script has not yet been ported to them.
 
+## Bun differential compatibility suite
+
+`tests/bun_compat.rs` runs hermetic JS/TS fixtures in fresh processes under
+both the same-commit vendored Bun executable and rbun's production embedding
+path. It compares exit status, stdout/stderr, and filesystem side effects.
+Unlisted differences fail; intentional embedding differences are locked to
+exact snapshots in `compat/expected-deviations.json`.
+
+```sh
+cargo test --test bun_compat -- --nocapture
+RBUN_COMPAT_FILTER=modules/ cargo test --test bun_compat -- --nocapture
+```
+
+The suite covers runtime behavior rather than Bun's CLI commands or its
+special `bun:test` VM. See [`compat/README.md`](compat/README.md) for the test
+contract, extension format, overrides, and expected-deviation policy.
+
 ## Benchmarks
 
 `cargo bench` runs `benches/compare.rs`, a criterion suite that drives
@@ -193,6 +210,8 @@ Reading the table:
 ## Layout
 
 - `src/` — the crate (`ffi.rs` is the JavaScriptCore C API + `bun_embed_*`).
+- `compat/` — hermetic fixtures and the exact expected-deviation manifest for
+  the Bun-vs-rbun differential suite.
 - `macros/` — `#[rbun::class]`, `#[rbun::methods]`.
 - `vendor/bun/` — Bun at the commit in `VENDORED_COMMIT` (tests/benchmarks
   dropped) with the patches from `vendor-patches/` applied: `src/runtime/embed.rs`
@@ -202,4 +221,4 @@ Reading the table:
   change the codemod / `files/` and re-apply.
 - `vendor-patches/` — the JSSG codemod, the added files, the generator that
   (re)vendors Bun and applies them, and the generated `bun.gen.patch`.
-- `tests/` — rquickjs-core's tests, ported.
+- `tests/` — the ported rquickjs-core tests and Bun differential runner.

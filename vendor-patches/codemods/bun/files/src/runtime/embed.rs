@@ -70,6 +70,28 @@ pub(crate) unsafe extern "C" fn bun_embed_init(
         bun_crash_handler::cli_state::set_main_thread_id(bun_threading::current_thread_id());
         bun_core::set_start_time(bun_core::time::nano_timestamp());
 
+        // A few runtime APIs still read Bun's process-global CLI context even
+        // when they are not entered through the CLI. In particular,
+        // `Bun.serve()` consults `Command::get().debug.silent` when installing
+        // its idle-timeout warning. The regular executable publishes a
+        // default `ContextData` before creating the VM; without the equivalent
+        // embed setup that accessor dereferences a null global pointer on the
+        // first HTTP request.
+        //
+        // Keep this context independent of any one per-thread VM. Both boxes
+        // are process-lifetime, matching the CLI's static context and log.
+        if bun_options_types::context::try_get().is_none() {
+            let log: &'static mut bun_ast::Log =
+                Box::leak(Box::new(bun_ast::Log::default()));
+            let mut context = Box::new(bun_options_types::context::ContextData::default());
+            context.log = core::ptr::from_mut(log);
+            context.start_time = bun_core::start_time();
+            let context = Box::leak(context);
+            // SAFETY: `context` is leaked and therefore outlives the process;
+            // `PROCESS_INIT` serializes this one-time publication.
+            unsafe { bun_options_types::context::set_global(context) };
+        }
+
         if install_crash_handler {
             bun_crash_handler::init();
         }
