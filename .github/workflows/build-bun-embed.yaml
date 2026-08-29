@@ -1,0 +1,141 @@
+name: build-bun-embed
+
+# Builds `libbun_embed.dylib` from the pinned, patched Bun tree and publishes it
+# as a release asset so downstream consumers (e.g. KeyChord/Chord) don't have to
+# spend ~20-30 minutes rebuilding Bun on every CI run.
+#
+# The release tag is derived from the Bun submodule commit, so a given dylib is
+# immutable and cacheable: `bun-embed-<bun-sha>`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and overwrite the release even if it already exists
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      # Only the inputs that change the dylib.
+      - com/github/oven-sh/bun/**
+      - dev/improve/rbun/configs/patching/**
+      - dev/improve/rbun/configs/bun/build/**
+      - .github/workflows/build-bun-embed.yaml
+
+concurrency:
+  group: build-bun-embed-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: aarch64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Resolve Bun source commit
+        id: bun
+        run: |
+          set -euo pipefail
+          sha="$(git -C com/github/oven-sh/bun/src rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short=${sha:0:12}" >> "$GITHUB_OUTPUT"
+          echo "tag=bun-embed-${sha:0:12}" >> "$GITHUB_OUTPUT"
+          echo "asset=libbun_embed-${{ matrix.arch }}-apple-darwin.dylib" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this asset already exists
+        id: existing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh release view "${{ steps.bun.outputs.tag }}" \
+               --json assets --jq '.assets[].name' 2>/dev/null \
+             | grep -qx "${{ steps.bun.outputs.asset }}"; then
+            echo "asset already published; nothing to do"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          brew update
+          brew install llvm@21 automake ccache cmake coreutils gnu-sed go icu4c \
+            libiconv libtool ninja pkg-config ruby
+          echo "$(brew --prefix llvm@21)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix ccache)/libexec" >> "$GITHUB_PATH"
+
+      - name: Install bun
+        if: steps.existing.outputs.skip != 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install rustup
+        if: steps.existing.outputs.skip != 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: ccache
+        if: steps.existing.outputs.skip != 'true'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: bun-embed-${{ matrix.arch }}-${{ steps.bun.outputs.short }}
+          max-size: 4G
+
+      - name: Install workspace dependencies
+        if: steps.existing.outputs.skip != 'true'
+        run: bun install --frozen-lockfile
+
+      - name: Build libbun_embed
+        if: steps.existing.outputs.skip != 'true'
+        timeout-minutes: 120
+        run: bun dev/improve/rbun/configs/bun/build/_build-bun.ts
+
+      - name: Stage asset
+        if: steps.existing.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          built="com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib"
+          test -f "$built" || { echo "::error::$built was not produced"; exit 1; }
+          mkdir -p out
+          cp "$built" "out/${{ steps.bun.outputs.asset }}"
+          # Guard against a silent arch mismatch on the runner.
+          lipo -info "out/${{ steps.bun.outputs.asset }}"
+          lipo -info "out/${{ steps.bun.outputs.asset }}" | grep -q "${{ matrix.arch }}"
+
+      - name: Publish release asset
+        if: steps.existing.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.bun.outputs.tag }}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --title "libbun_embed (bun ${{ steps.bun.outputs.short }})" \
+              --notes "Prebuilt \`libbun_embed.dylib\` for Bun source commit \`${{ steps.bun.outputs.sha }}\`.
+
+Consumed by downstream builds via \`RBUN_BUN_LIB_DIR\`." \
+              --prerelease
+          fi
+          gh release upload "$tag" "out/${{ steps.bun.outputs.asset }}" --clobber
