@@ -80,8 +80,10 @@ jobs:
         run: |
           set -euo pipefail
           brew update
+          # nasm is only needed for the x86_64 codegen path, but installing it
+          # unconditionally keeps the two matrix legs identical.
           brew install llvm@21 automake ccache cmake coreutils gnu-sed go icu4c \
-            libiconv libtool ninja pkg-config ruby
+            libiconv libtool nasm ninja pkg-config ruby
           echo "$(brew --prefix llvm@21)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix ccache)/libexec" >> "$GITHUB_PATH"
 
