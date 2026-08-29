@@ -131,11 +131,10 @@ jobs:
           set -euo pipefail
           tag="${{ steps.bun.outputs.tag }}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
+            notes="Prebuilt libbun_embed.dylib for Bun source commit ${{ steps.bun.outputs.sha }}. Consumed by downstream builds via RBUN_BUN_LIB_DIR."
             gh release create "$tag" \
               --title "libbun_embed (bun ${{ steps.bun.outputs.short }})" \
-              --notes "Prebuilt \`libbun_embed.dylib\` for Bun source commit \`${{ steps.bun.outputs.sha }}\`.
-
-Consumed by downstream builds via \`RBUN_BUN_LIB_DIR\`." \
+              --notes "$notes" \
               --prerelease
           fi
           gh release upload "$tag" "out/${{ steps.bun.outputs.asset }}" --clobber
