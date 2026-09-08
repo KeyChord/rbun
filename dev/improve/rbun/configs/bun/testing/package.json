@@ -5,5 +5,8 @@
   "type": "module",
   "bin": {
     "_run-upstream-bun-tests": "./_run-upstream-bun-tests.ts"
+  },
+  "dependencies": {
+    "citty": "^0.2.2"
   }
 }

@@ -5,5 +5,8 @@
   "type": "module",
   "bin": {
     "_build-bun": "./_build-bun.ts"
+  },
+  "dependencies": {
+    "citty": "^0.2.2"
   }
 }

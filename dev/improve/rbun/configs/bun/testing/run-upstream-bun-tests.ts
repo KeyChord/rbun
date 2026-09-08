@@ -1,12 +1,6 @@
-#!/usr/bin/env bun
 /**
  * Initialize, classify, and differentially run Bun's upstream runtime tests
  * directly from rbun's pinned Bun source submodule.
- *
- *   bun dev/improve/rbun/bun-upstream-tests.ts sync
- *   bun dev/improve/rbun/bun-upstream-tests.ts classify
- *   bun dev/improve/rbun/bun-upstream-tests.ts run image
- *   bun dev/improve/rbun/bun-upstream-tests.ts run portable-runtime [substring]
  *
  * `RBUN_UPSTREAM_BUN_DIR` may point at another full/sparse checkout of the
  * same commit.
@@ -15,7 +9,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const repo = resolve(import.meta.dirname, "../../..");
+const SCRIPT = "_run-upstream-bun-tests";
+const repo = resolve(import.meta.dirname, "../../../../../..");
 const source = join(repo, "com/github/oven-sh/bun/src");
 const config = JSON.parse(readFileSync(join(repo, "compat/upstream-suites.json"), "utf8"));
 const checkout = resolve(process.env.RBUN_UPSTREAM_BUN_DIR ?? source);
@@ -24,19 +19,6 @@ const reference = resolve(
   process.env.RBUN_REFERENCE_BUN ?? join(repo, "com/github/oven-sh/bun/dist/build/release/bun"),
 );
 const candidate = resolve(process.env.RBUN_TEST_HOST ?? join(repo, "target/debug/rbun-test-host"));
-
-function printUsage(): void {
-  const suites = config.suites as Record<string, { description: string }>;
-  console.log(`usage:
-  bun dev/improve/rbun/bun-upstream-tests.ts sync
-  bun dev/improve/rbun/bun-upstream-tests.ts classify
-  bun dev/improve/rbun/bun-upstream-tests.ts run <suite> [substring]
-
-suites:
-${Object.entries(suites)
-  .map(([name, suite]) => `  ${name.padEnd(28)} ${suite.description}`)
-  .join("\n")}`);
-}
 
 type Classification = "in-process" | "runtime-subprocess" | "cli" | "mixed";
 type Observation = {
@@ -82,34 +64,21 @@ function checkoutRevision(directory: string): string {
   return runCommand(["git", "-C", directory, "rev-parse", "HEAD"], repo, true).trim();
 }
 
-ensureSourceSubmodule();
-const revision = checkoutRevision(source);
-
-function syncCheckout(): void {
-  if (checkout === source) {
-    console.log(`Bun source submodule is initialized at ${revision}`);
-    return;
-  }
-  if (!existsSync(join(checkout, ".git"))) {
-    runCommand(["git", "init", checkout]);
-    runCommand(["git", "-C", checkout, "remote", "add", "origin", "https://github.com/oven-sh/bun.git"]);
-    runCommand(["git", "-C", checkout, "sparse-checkout", "init", "--cone"]);
-    runCommand(["git", "-C", checkout, "sparse-checkout", "set", "test"]);
-  }
-  runCommand(["git", "-C", checkout, "fetch", "--depth=1", "origin", revision]);
-  runCommand(["git", "-C", checkout, "checkout", "--detach", "FETCH_HEAD"]);
-  const actual = checkoutRevision(checkout);
-  if (actual !== revision) throw new Error(`upstream checkout is ${actual}, expected ${revision}`);
+function pinnedRevision(): string {
+  ensureSourceSubmodule();
+  return checkoutRevision(source);
 }
 
-function requireCheckout(): void {
+function requireCheckout(): string {
+  const revision = pinnedRevision();
   if (!existsSync(testRoot)) {
-    throw new Error(`upstream tests are missing; run: bun dev/improve/rbun/bun-upstream-tests.ts sync`);
+    throw new Error(`upstream tests are missing; run: bun ${SCRIPT} sync`);
   }
   const actual = checkoutRevision(checkout);
   if (actual !== revision) {
     throw new Error(`upstream checkout is ${actual}, expected ${revision}; run sync`);
   }
+  return revision;
 }
 
 function isTestFile(path: string): boolean {
@@ -129,16 +98,16 @@ function discoverFiles(): string[] {
 }
 
 function classify(file: string): Classification {
-  const source = readFileSync(join(testRoot, file), "utf8");
-  const callsBunExe = /\bbunExe\s*\(/.test(source) || /\bbunRun\s*\(/.test(source);
+  const sourceText = readFileSync(join(testRoot, file), "utf8");
+  const callsBunExe = /\bbunExe\s*\(/.test(sourceText) || /\bbunRun\s*\(/.test(sourceText);
   if (!callsBunExe) return "in-process";
 
   const commands = (config.cliSubcommands as string[]).map(escapeRegex).join("|");
   const invokesCli = new RegExp(
     `bunExe\\s*\\(\\s*\\)\\s*,\\s*["'](?:${commands})["']|bunRun\\s*\\(`,
-  ).test(source);
+  ).test(sourceText);
   const invokesRuntime = /bunExe\s*\(\s*\)\s*,\s*["'](?:-e|--eval|--smol|--preload|[^"']+\.[cm]?[jt]sx?)["']/.test(
-    source,
+    sourceText,
   );
   if (invokesCli && invokesRuntime) return "mixed";
   if (invokesCli) return "cli";
@@ -154,17 +123,6 @@ function selectSuite(name: string): string[] {
   if (!suite) throw new Error(`unknown suite ${JSON.stringify(name)}`);
   if (suite.files) return [...suite.files];
   return discoverFiles().filter(file => classify(file) === suite.classification);
-}
-
-function printClassifications(): void {
-  const files = discoverFiles();
-  const counts = new Map<Classification, number>();
-  for (const file of files) counts.set(classify(file), (counts.get(classify(file)) ?? 0) + 1);
-  console.log(`revision ${revision}`);
-  console.log(`test files ${files.length}`);
-  for (const kind of ["in-process", "runtime-subprocess", "mixed", "cli"] as const) {
-    console.log(`${kind.padEnd(20)} ${counts.get(kind) ?? 0}`);
-  }
 }
 
 async function observe(command: string[], timeoutMs: number): Promise<Observation> {
@@ -217,8 +175,43 @@ function sameSummary(a: Summary, b: Summary): boolean {
   return (Object.keys(a) as (keyof Summary)[]).every(key => a[key] === b[key]);
 }
 
-async function runSuite(name: string, filter?: string): Promise<void> {
-  requireCheckout();
+export function suiteDescriptions(): Record<string, string> {
+  const suites = config.suites as Record<string, { description: string }>;
+  return Object.fromEntries(Object.entries(suites).map(([name, suite]) => [name, suite.description]));
+}
+
+export function syncCheckout(): void {
+  const revision = pinnedRevision();
+  if (checkout === source) {
+    console.log(`Bun source submodule is initialized at ${revision}`);
+    return;
+  }
+  if (!existsSync(join(checkout, ".git"))) {
+    runCommand(["git", "init", checkout]);
+    runCommand(["git", "-C", checkout, "remote", "add", "origin", "https://github.com/oven-sh/bun.git"]);
+    runCommand(["git", "-C", checkout, "sparse-checkout", "init", "--cone"]);
+    runCommand(["git", "-C", checkout, "sparse-checkout", "set", "test"]);
+  }
+  runCommand(["git", "-C", checkout, "fetch", "--depth=1", "origin", revision]);
+  runCommand(["git", "-C", checkout, "checkout", "--detach", "FETCH_HEAD"]);
+  const actual = checkoutRevision(checkout);
+  if (actual !== revision) throw new Error(`upstream checkout is ${actual}, expected ${revision}`);
+}
+
+export function printClassifications(): void {
+  const revision = requireCheckout();
+  const files = discoverFiles();
+  const counts = new Map<Classification, number>();
+  for (const file of files) counts.set(classify(file), (counts.get(classify(file)) ?? 0) + 1);
+  console.log(`revision ${revision}`);
+  console.log(`test files ${files.length}`);
+  for (const kind of ["in-process", "runtime-subprocess", "mixed", "cli"] as const) {
+    console.log(`${kind.padEnd(20)} ${counts.get(kind) ?? 0}`);
+  }
+}
+
+export async function runSuite(name: string, filter?: string): Promise<void> {
+  const revision = requireCheckout();
   if (!existsSync(reference)) throw new Error(`reference Bun missing: ${reference}`);
   runCommand(["cargo", "build", "--bin", "rbun-test-host"]);
   const revisionOutput = runCommand([reference, "--revision"], repo, true);
@@ -262,18 +255,4 @@ async function runSuite(name: string, filter?: string): Promise<void> {
   if (failures.length) {
     throw new Error(`${failures.length} upstream compatibility failure(s)\n\n${failures.join("\n\n")}`);
   }
-}
-
-const [command = "run", suite = "image", filter] = process.argv.slice(2);
-if (command === "help" || command === "--help" || command === "-h") {
-  printUsage();
-} else if (command === "sync") {
-  syncCheckout();
-} else if (command === "classify") {
-  requireCheckout();
-  printClassifications();
-} else if (command === "run") {
-  await runSuite(suite, filter);
-} else {
-  throw new Error(`unknown command ${JSON.stringify(command)} (expected sync, classify, or run)`);
 }
