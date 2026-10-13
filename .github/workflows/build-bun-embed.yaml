@@ -19,9 +19,9 @@ on:
       - main
     paths:
       # Only the inputs that change the dylib.
-      - com/github/oven-sh/bun/**
-      - dev/improve/rbun/configs/patching/**
-      - dev/improve/rbun/configs/bun/build/**
+      - packages/com/github/oven-sh/bun/**
+      - packages/dev/improve/rbun/configs/patching/**
+      - packages/dev/improve/rbun/configs/bun/build/**
       - .github/workflows/build-bun-embed.yaml
 
 concurrency:
@@ -50,7 +50,7 @@ jobs:
         id: bun
         run: |
           set -euo pipefail
-          sha="$(git -C com/github/oven-sh/bun/src rev-parse HEAD)"
+          sha="$(git -C packages/com/github/oven-sh/bun/src rev-parse HEAD)"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "short=${sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "tag=bun-embed-${sha:0:12}" >> "$GITHUB_OUTPUT"
@@ -111,13 +111,13 @@ jobs:
       - name: Build libbun_embed
         if: steps.existing.outputs.skip != 'true'
         timeout-minutes: 120
-        run: bun dev/improve/rbun/configs/bun/build/_build-bun.ts
+        run: bun packages/dev/improve/rbun/configs/bun/build/_build-bun.ts
 
       - name: Stage asset
         if: steps.existing.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          built="com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib"
+          built="packages/com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib"
           test -f "$built" || { echo "::error::$built was not produced"; exit 1; }
           mkdir -p out
           cp "$built" "out/${{ steps.bun.outputs.asset }}"

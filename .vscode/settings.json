@@ -1,0 +1,11 @@
+{
+  "files.exclude": {
+    "**/packages/com/github/oven-sh/bun": true
+  },
+  "search.exclude": {
+    "**/packages/com/github/oven-sh/bun": true
+  },
+  "files.watcherExclude": {
+    "**/packages/com/github/oven-sh/bun/**": true
+  }
+}

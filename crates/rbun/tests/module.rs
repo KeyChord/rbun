@@ -295,3 +295,54 @@ fn resolving_error() {
         })
     })
 }
+
+/// `Runtime::set_import_meta_hook` decorates the real `import.meta` of a module
+/// Bun imported from disk. rbun's own [`Module::meta`] only covers modules it
+/// declared itself, so this is the case that needs the Bun-side hook.
+#[test]
+fn import_meta_hook_decorates_disk_module() {
+    use std::rc::Rc;
+    use std::cell::RefCell;
+
+    let (injected, seen) = js_thread(|| {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        // Every specifier the hook was invoked for, to confirm it fires per module.
+        let seen: Rc<RefCell<Vec<StdString>>> = Rc::new(RefCell::new(Vec::new()));
+        let recorded = Rc::clone(&seen);
+        rt.set_import_meta_hook(Some(Box::new(move |_ctx, specifier, meta| {
+            if let Some(specifier) = specifier.as_string().and_then(|s| s.to_string().ok()) {
+                recorded.borrow_mut().push(specifier);
+            }
+            meta.set("injected", "from-host").unwrap();
+        })));
+
+        let path = common::repo_root()
+            .join("crates/rbun/tests/fixtures/import_meta/probe.ts")
+            .canonicalize()
+            .unwrap();
+        let source = format!(
+            "import {{ injected }} from {:?};\nglobalThis.__importMetaProbe = injected;\n",
+            path.to_str().unwrap()
+        );
+
+        let injected: StdString = ctx.with(|ctx| {
+            Module::evaluate(ctx.clone(), "import_meta_probe.js", source)
+                .catch(&ctx)
+                .unwrap()
+                .finish::<()>()
+                .catch(&ctx)
+                .unwrap();
+            ctx.globals().get("__importMetaProbe").unwrap()
+        });
+        let seen = seen.borrow().clone();
+        (injected, seen)
+    });
+
+    assert_eq!(injected, "from-host");
+    assert!(
+        seen.iter().any(|specifier| specifier.contains("probe.ts")),
+        "hook should fire for the disk module, saw: {seen:?}"
+    );
+}

@@ -265,6 +265,11 @@ impl AsyncRuntime {
         self.inner.set_loader(resolver, loader)
     }
 
+    /// See [`Runtime::set_import_meta_hook`](crate::Runtime::set_import_meta_hook).
+    pub async fn set_import_meta_hook(&self, hook: Option<crate::runtime::ImportMetaHook>) {
+        self.inner.set_import_meta_hook(hook)
+    }
+
     pub async fn set_host_promise_rejection_tracker(&self, tracker: Option<crate::runtime::RejectionTracker>) {
         self.inner.set_host_promise_rejection_tracker(tracker)
     }

@@ -50,7 +50,7 @@ fn one_shot_runtime_host_matches_bun_process_identity_and_lifecycle() {
     let repo = repo_root();
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let host = PathBuf::from(env!("CARGO_BIN_EXE_rbun-test-host"));
-    let bun = repo.join("com/github/oven-sh/bun/dist/build/release/bun");
+    let bun = repo.join("packages/com/github/oven-sh/bun/dist/build/release/bun");
     let fixture = crate_dir.join("tests/fixtures/runtime_host/identity.ts");
 
     let reference = Command::new(&bun)

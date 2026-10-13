@@ -1,5 +1,5 @@
 //! Locates `libbun_embed.dylib` (produced from the generated, patched Bun tree
-//! at `com/github/oven-sh/bun/dist`) and links it. Override the directory with
+//! at `packages/com/github/oven-sh/bun/dist`) and links it. Override the directory with
 //! `RBUN_BUN_LIB_DIR`.
 //!
 //! The directory is also published as `DEP_BUN_EMBED_LIB_DIR` so the final
@@ -22,7 +22,7 @@ fn main() {
     let root = repo_root(&manifest_dir);
     let lib_dir = match env::var("RBUN_BUN_LIB_DIR") {
         Ok(dir) => PathBuf::from(dir),
-        Err(_) => root.join("com/github/oven-sh/bun/dist/build/release"),
+        Err(_) => root.join("packages/com/github/oven-sh/bun/dist/build/release"),
     };
     let lib_dir = lib_dir.canonicalize().unwrap_or(lib_dir);
 

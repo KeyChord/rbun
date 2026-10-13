@@ -39,7 +39,7 @@ fn run_suite() -> Result<(), String> {
     let repo = repo_root();
     let reference = std::env::var_os("RBUN_REFERENCE_BUN")
         .map(PathBuf::from)
-        .unwrap_or_else(|| repo.join("com/github/oven-sh/bun/dist/build/release/bun"));
+        .unwrap_or_else(|| repo.join("packages/com/github/oven-sh/bun/dist/build/release/bun"));
     let candidate = std::env::var_os("RBUN_COMPAT_HOST")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_rbun-compat-host")));
@@ -589,7 +589,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn verify_reference_revision(reference: &Path, repo: &Path) -> Result<(), String> {
-    let source = repo.join("com/github/oven-sh/bun/src");
+    let source = repo.join("packages/com/github/oven-sh/bun/src");
     let expected_output = Command::new("git")
         .arg("-C")
         .arg(&source)

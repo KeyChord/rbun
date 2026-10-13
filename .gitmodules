@@ -1,3 +1,4 @@
 [submodule "com/github/oven-sh/bun/src"]
-	path = com/github/oven-sh/bun/src
+	path = packages/com/github/oven-sh/bun/src
 	url = https://github.com/oven-sh/bun.git
+	ignore = dirty

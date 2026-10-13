@@ -1,6 +1,6 @@
 //! Raw bindings: the subset of JavaScriptCore's public C API that `rbun` uses
 //! (`<JavaScriptCore/JavaScript.h>`), plus Bun's embedding entry points
-//! (`com/github/oven-sh/bun/dist/src/runtime/embed.rs`). All exported by
+//! (`packages/com/github/oven-sh/bun/dist/src/runtime/embed.rs`). All exported by
 //! `libbun_embed.dylib`.
 
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals, dead_code)]
@@ -352,8 +352,14 @@ unsafe extern "C" {
     pub fn JSObjectGetArrayBufferByteLength(ctx: JSContextRef, object: JSObjectRef, exception: *mut JSValueRef) -> usize;
 
     pub fn bun_embed_vm_delete_module_registry_entry(vm: *mut c_void, specifier_ptr: *const u8, specifier_len: usize) -> bool;
+    /// Install (or clear, with `None`) the per-module `import.meta` hook. The
+    /// callback receives the module specifier and the freshly created
+    /// `import.meta` object; see `Runtime::set_import_meta_hook`.
+    pub fn bun_embed_vm_set_import_meta_callback(
+        callback: Option<unsafe extern "C" fn(*mut c_void, JSValueRef, JSValueRef)>,
+    );
 
-    // ─── Bun embedding (com/github/oven-sh/bun/dist/src/runtime/embed.rs) ───
+    // ─── Bun embedding (packages/com/github/oven-sh/bun/dist/src/runtime/embed.rs) ───
     pub fn bun_embed_run_internal_process_mode();
     pub fn bun_embed_init(argc: c_int, argv: *const *const c_char, install_crash_handler: bool);
     pub fn bun_embed_vm_create(cwd_ptr: *const u8, cwd_len: usize) -> *mut c_void;

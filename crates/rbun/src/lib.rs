@@ -2,7 +2,7 @@
 //! [`rquickjs`](https://docs.rs/rquickjs).
 //!
 //! Bun is linked as `libbun_embed.dylib` (built from the vendored Bun
-//! distribution; see `com/github/oven-sh/bun/_vendor.ts` and `build.rs`). Values are
+//! distribution; see `packages/com/github/oven-sh/bun/_vendor.ts` and `build.rs`). Values are
 //! handled through JavaScriptCore's public C API; the event loop, module
 //! loader and every Bun / Node API come from Bun itself.
 //!
@@ -92,8 +92,8 @@ pub use module::{Declarations, Evaluated, Exports, Module, ModuleDef};
 pub use object::{Accessor, AsProperty, Filter, Property};
 pub use persistent::{Outlive, Persistent};
 pub use runtime::{
-    Context, ContextBuilder, Ctx, EvalOptions, JsLifetime, Runtime, RuntimeOptions, TestResult,
-    UserDataGuard,
+    Context, ContextBuilder, Ctx, EvalOptions, ImportMetaHook, JsLifetime, Runtime, RuntimeOptions,
+    TestResult, UserDataGuard,
 };
 pub use utils::{ResultExt, format_error};
 pub use value::{Array, BigInt, Constructor, FromJs, Function, IntoArgs, IntoJs, Object, Promise, PromiseState, String, Symbol, Type, Value};

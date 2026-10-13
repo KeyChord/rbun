@@ -63,6 +63,9 @@ pub(crate) const EVAL_MODULE_NAME: &str = "[rbun-eval].js";
 
 pub(crate) type DeferredJob = Box<dyn FnOnce() -> Result<()>>;
 pub(crate) type RejectionTracker = Box<dyn for<'js> Fn(Ctx<'js>, Value<'js>, Value<'js>, bool)>;
+/// Called once per module with `(ctx, specifier, import_meta)`; see
+/// [`Runtime::set_import_meta_hook`].
+pub type ImportMetaHook = Box<dyn for<'js> Fn(Ctx<'js>, Value<'js>, Object<'js>)>;
 
 pub(crate) struct RuntimeInner {
     pub(crate) vm: *mut core::ffi::c_void,
@@ -78,6 +81,7 @@ pub(crate) struct RuntimeInner {
     /// Calls queued by [`Function::defer`]; run by `execute_pending_job`.
     pub(crate) deferred: RefCell<VecDeque<DeferredJob>>,
     pub(crate) rejection_tracker: RefCell<Option<RejectionTracker>>,
+    pub(crate) import_meta_hook: RefCell<Option<ImportMetaHook>>,
     info: RefCell<Option<std::string::String>>,
     /// `__rbun.<name>` helper functions, rooted for the runtime's lifetime.
     helpers: RefCell<HashMap<&'static str, ffi::JSValueRef>>,
@@ -269,6 +273,7 @@ impl Runtime {
             executor: crate::async_rt::Executor::default(),
             deferred: RefCell::new(VecDeque::new()),
             rejection_tracker: RefCell::new(None),
+            import_meta_hook: RefCell::new(None),
             info: RefCell::new(None),
             helpers: RefCell::new(HashMap::new()),
             atoms: RefCell::new(HashMap::new()),
@@ -374,6 +379,44 @@ impl Runtime {
     /// promises observed through [`Promise::finish`] / `into_future`.
     pub fn set_host_promise_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
         *self.inner.rejection_tracker.borrow_mut() = tracker;
+    }
+
+    /// Register a hook that runs once per module, receiving that module's own
+    /// `import.meta` object before JavaScriptCore caches it. Properties set on
+    /// the object are what the module's `import.meta` exposes for the rest of
+    /// its life.
+    ///
+    /// This is rbun's equivalent of rquickjs' [`Module::meta`], which wraps
+    /// QuickJS' `JS_GetImportMeta`. JavaScriptCore keeps a module's
+    /// materialized `import.meta` in its bytecode layer rather than on
+    /// `AbstractModuleRecord`, and exposes no public getter for it, so rbun
+    /// offers the same capability push-first: the host is handed each object at
+    /// creation instead of fetching it later. [`Module::meta`] still works for
+    /// modules rbun itself declared.
+    ///
+    /// The hook runs on the runtime's thread while the module is being set up.
+    /// Panicking or re-entering module evaluation from inside it is not
+    /// supported.
+    ///
+    /// ```no_run
+    /// # use rbun::{Runtime, Result};
+    /// # fn main() -> Result<()> {
+    /// let rt = Runtime::new()?;
+    /// rt.set_import_meta_hook(Some(Box::new(|ctx, specifier, meta| {
+    ///     let _ = (specifier, meta.set("answer", 42), ctx);
+    /// })));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_import_meta_hook(&self, hook: Option<ImportMetaHook>) {
+        let installed = hook.is_some();
+        *self.inner.import_meta_hook.borrow_mut() = hook;
+        // The underlying hook is a process-wide C global, so only register the
+        // trampoline while a hook is actually installed.
+        // SAFETY: the runtime's VM, on its thread.
+        unsafe {
+            ffi::bun_embed_vm_set_import_meta_callback(installed.then_some(import_meta_trampoline));
+        }
     }
 
     /// Whether a deferred call is queued or anything (timers, sockets, …)
@@ -1092,3 +1135,33 @@ const BOOTSTRAP: &str = r#""use strict";
   });
 })();
 "#;
+
+/// Bun calls this once per module, from the patched
+/// `GlobalObject::moduleLoaderCreateImportMetaProperties`. Dispatches to the
+/// hook installed by [`Runtime::set_import_meta_hook`].
+unsafe extern "C" fn import_meta_trampoline(
+    _global: *mut core::ffi::c_void,
+    key: ffi::JSValueRef,
+    meta: ffi::JSValueRef,
+) {
+    let Some(inner) = crate::function::current_inner() else {
+        return;
+    };
+    let ctx: Ctx<'static> = Ctx::from_inner(inner);
+    // `try_borrow` rather than `borrow`: a hook that triggers another module
+    // load would re-enter here, and panicking inside a C callback is worse
+    // than skipping the nested decoration.
+    let Ok(hook) = inner.import_meta_hook.try_borrow() else {
+        return;
+    };
+    let Some(hook) = hook.as_ref() else {
+        return;
+    };
+    // SAFETY: JSC passes two live values for the duration of the call.
+    let specifier = unsafe { Value::from_raw(ctx, key) };
+    let meta = unsafe { Value::from_raw(ctx, meta) };
+    let Some(meta) = meta.into_object() else {
+        return;
+    };
+    hook(ctx, specifier, meta);
+}

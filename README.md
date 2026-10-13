@@ -35,11 +35,11 @@ async fn main() -> rbun::Result<()> {
 
 ## Building
 
-rbun links `com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib`.
-Pristine upstream Bun is pinned as the `com/github/oven-sh/bun/src` Git
-submodule; [`_vendor.ts`](com/github/oven-sh/bun/_vendor.ts) copies it into the
+rbun links `packages/com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib`.
+Pristine upstream Bun is pinned as the `packages/com/github/oven-sh/bun/src` Git
+submodule; [`_vendor.ts`](packages/com/github/oven-sh/bun/_vendor.ts) copies it into the
 ignored `dist/` tree and applies the JSSG patch configuration from
-[`dev/improve/rbun/configs/patching/`](dev/improve/rbun/configs/patching/README.md).
+[`packages/dev/improve/rbun/configs/patching/`](packages/dev/improve/rbun/configs/patching/README.md).
 The generated `bun.gen.patch` there is the reviewable source-to-dist diff.
 
 ```sh
@@ -71,9 +71,9 @@ _build-bun && cargo test
 
 If an upstream change moved one of the patch anchors the codemod fails loudly
 (`JSSG patch anchor drifted`); fix
-`dev/improve/rbun/configs/patching/codemods/bun/codemod.ts` and its fixtures,
+`packages/dev/improve/rbun/configs/patching/codemods/bun/codemod.ts` and its fixtures,
 then regenerate. Commit the changed submodule gitlink along with the patch
-updates. See the [patching README](dev/improve/rbun/configs/patching/README.md).
+updates. See the [patching README](packages/dev/improve/rbun/configs/patching/README.md).
 
 ## Compatibility with rquickjs
 
@@ -123,6 +123,15 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
   instead of failing; the module namespace is only available after
   evaluation; nested synchronous evaluation from inside a host call during
   module evaluation is not supported.
+- **`import.meta`:** rquickjs' `Module::meta` wraps QuickJS'
+  `JS_GetImportMeta`, which returns any module's live `import.meta` on demand.
+  JavaScriptCore has no public equivalent — a module's materialized
+  `import.meta` lives in the bytecode layer, not on `AbstractModuleRecord` — so
+  rbun offers the same capability push-first:
+  `Runtime::set_import_meta_hook` is handed each module's real `import.meta`
+  once, at creation, before JSC caches it, and properties set there are what
+  that module sees. `Module::meta` still returns the metadata object for
+  modules rbun itself declared.
 - **Async:** `AsyncContext::async_with` drives Bun's loop and host futures
   (`ctx.spawn`, `Async` host functions, `Promised`) while the block is
   pending. `AsyncRuntime::drive()` only moves host futures; use `idle()` /
@@ -279,11 +288,11 @@ Reading the table:
 - `crates/rbun-macros/` — `#[rbun::class]`, `#[rbun::methods]`.
 - `compat/` — hermetic fixtures, the exact expected-deviation manifest, and
   pinned upstream-suite selection/classification policy.
-- `com/github/oven-sh/bun/src/` — pristine Bun pinned as a Git submodule;
+- `packages/com/github/oven-sh/bun/src/` — pristine Bun pinned as a Git submodule;
   upstream tests and the source revision come directly from this tree.
-- `com/github/oven-sh/bun/dist/` — ignored generated build input and local Bun
+- `packages/com/github/oven-sh/bun/dist/` — ignored generated build input and local Bun
   artifacts. `_vendor` recreates it from `src/`, then adds the embedding C
   ABI/linker files and applies the two source transformations.
-- `dev/improve/rbun/configs/patching/` — canonical JSSG codemod, added files,
+- `packages/dev/improve/rbun/configs/patching/` — canonical JSSG codemod, added files,
   fixtures, dependencies, and generated `bun.gen.patch` review diff.
-- `dev/improve/rbun/configs/bun/` — `_build-bun` and upstream test harness bins.
+- `packages/dev/improve/rbun/configs/bun/` — `_build-bun` and upstream test harness bins.

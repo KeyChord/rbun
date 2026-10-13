@@ -5,15 +5,17 @@
 node_modules/
 !compat/fixtures/**/node_modules/
 
-# Generated Bun vendor tree (see README)
-/com/github/oven-sh/bun/dist/
+# Third-party Bun source and generated build tree (see README).
+# Existing tracked package files and the pinned submodule remain tracked.
+/packages/com/github/oven-sh/bun/
 
 # OS
 .DS_Store
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 *.swp
 
 # Env

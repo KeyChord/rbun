@@ -10,7 +10,7 @@
         "@rbun/dev.improve.rbun.configs.bun.testing": "workspace:*",
       },
     },
-    "com/github/oven-sh/bun": {
+    "packages/com/github/oven-sh/bun": {
       "name": "@rbun/com.github.oven-sh.bun",
       "version": "0.0.0",
       "bin": {
@@ -18,21 +18,21 @@
         "_build-bun": "./_build-bun.ts",
       },
     },
-    "dev/improve/rbun/configs/bun/build": {
+    "packages/dev/improve/rbun/configs/bun/build": {
       "name": "@rbun/dev.improve.rbun.configs.bun.build",
       "version": "0.0.0",
       "bin": {
         "_build-bun": "./_build-bun.ts",
       },
     },
-    "dev/improve/rbun/configs/bun/testing": {
+    "packages/dev/improve/rbun/configs/bun/testing": {
       "name": "@rbun/dev.improve.rbun.configs.bun.testing",
       "version": "0.0.0",
       "bin": {
         "_run-upstream-bun-tests": "./_run-upstream-bun-tests.ts",
       },
     },
-    "dev/improve/rbun/configs/patching": {
+    "packages/dev/improve/rbun/configs/patching": {
       "name": "@rbun/dev.improve.rbun.configs.patching",
       "version": "0.0.0",
       "devDependencies": {
@@ -40,7 +40,7 @@
         "codemod": "catalog:",
       },
     },
-    "dev/improve/rbun/configs/patching/codemods/bun": {
+    "packages/dev/improve/rbun/configs/patching/codemods/bun": {
       "name": "@rbun/dev.improve.rbun.configs.patching.codemods.bun",
       "version": "0.0.0",
       "devDependencies": {
@@ -69,15 +69,15 @@
 
     "@codemod.com/jssg-types": ["@codemod.com/jssg-types@1.6.3", "", {}, "sha512-b5829ixO5TdGL5xg5YcL9YfiLC3WwFZU+8Zx78NpsHlJ1iySbqfA0g0psqNXv8ss/r7hdpy2KiBXm3GE6bN5bQ=="],
 
-    "@rbun/com.github.oven-sh.bun": ["@rbun/com.github.oven-sh.bun@workspace:com/github/oven-sh/bun"],
+    "@rbun/com.github.oven-sh.bun": ["@rbun/com.github.oven-sh.bun@workspace:packages/com/github/oven-sh/bun"],
 
-    "@rbun/dev.improve.rbun.configs.bun.build": ["@rbun/dev.improve.rbun.configs.bun.build@workspace:dev/improve/rbun/configs/bun/build"],
+    "@rbun/dev.improve.rbun.configs.bun.build": ["@rbun/dev.improve.rbun.configs.bun.build@workspace:packages/dev/improve/rbun/configs/bun/build"],
 
-    "@rbun/dev.improve.rbun.configs.bun.testing": ["@rbun/dev.improve.rbun.configs.bun.testing@workspace:dev/improve/rbun/configs/bun/testing"],
+    "@rbun/dev.improve.rbun.configs.bun.testing": ["@rbun/dev.improve.rbun.configs.bun.testing@workspace:packages/dev/improve/rbun/configs/bun/testing"],
 
-    "@rbun/dev.improve.rbun.configs.patching": ["@rbun/dev.improve.rbun.configs.patching@workspace:dev/improve/rbun/configs/patching"],
+    "@rbun/dev.improve.rbun.configs.patching": ["@rbun/dev.improve.rbun.configs.patching@workspace:packages/dev/improve/rbun/configs/patching"],
 
-    "@rbun/dev.improve.rbun.configs.patching.codemods.bun": ["@rbun/dev.improve.rbun.configs.patching.codemods.bun@workspace:dev/improve/rbun/configs/patching/codemods/bun"],
+    "@rbun/dev.improve.rbun.configs.patching.codemods.bun": ["@rbun/dev.improve.rbun.configs.patching.codemods.bun@workspace:packages/dev/improve/rbun/configs/patching/codemods/bun"],
 
     "codemod": ["codemod@1.15.3", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "@codemod.com/cli-darwin-arm64": "1.15.3", "@codemod.com/cli-darwin-x64": "1.15.3", "@codemod.com/cli-linux-arm64-gnu": "1.15.3", "@codemod.com/cli-linux-arm64-musl": "1.15.3", "@codemod.com/cli-linux-x64-gnu": "1.15.3", "@codemod.com/cli-linux-x64-musl": "1.15.3", "@codemod.com/cli-win32-x64-msvc": "1.15.3" }, "bin": { "codemod": "codemod" } }, "sha512-Cu/FCzj7CLN2DtOkqaIgfW8mVnrNlGdN4mGyfr6vxqVJPqBDMk0s27NBh5EKPiW2EUXm8k6Kwh2NvKDAkUfWRw=="],
 

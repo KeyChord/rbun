@@ -3,8 +3,8 @@
 This suite runs the same fixture in two fresh processes and compares the
 observable result:
 
-1. `com/github/oven-sh/bun/dist/build/release/bun`, built from the pristine
-   Bun submodule at `com/github/oven-sh/bun/src`, using `reference-driver.mjs`
+1. `packages/com/github/oven-sh/bun/dist/build/release/bun`, built from the pristine
+   Bun submodule at `packages/com/github/oven-sh/bun/src`, using `reference-driver.mjs`
    to dynamically import the fixture.
 2. `rbun-compat-host`, which initializes rbun through its production
    `Runtime` / `Module::import` path, waits for module evaluation and event-loop
