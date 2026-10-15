@@ -1,11 +1,11 @@
 /**
  * JSSG codemod that makes Bun's Rust runtime embeddable by rbun.
  *
- * Two source files are touched; each is routed by a content signature so the
+ * Three source files are touched; each is routed by a content signature so the
  * same codemod can be pointed at either file (and at the fixtures under
  * `@fixtures/`, whose names don't match the real paths):
  *
- *   src/runtime/lib.rs          Mount `pub mod embed;` next to the other
+ *   src/runtime/lib.rs          Mount `pub(crate) mod embed;` next to the other
  *                               runtime modules. The module body itself is
  *                               `files/src/runtime/embed.rs`, copied verbatim
  *                               by `packages/com/github/oven-sh/bun/_vendor.ts`.
@@ -23,7 +23,7 @@
  *                               `AbstractModuleRecord`), so this push-shaped hook
  *                               is how rbun offers rquickjs's `Module::meta`
  *                               capability without patching JSC internals.
- *   src/bundler/transpiler.rs   `PluginRunner::could_be_plugin` upstream only
+ *   src/jsc/ModuleLoader.rs     `could_be_plugin` upstream only
  *                               forwards `ns:` specifiers to runtime
  *                               `onResolve` hooks, so a bare name such as
  *                               `chord` never reaches rbun's `Resolver` (which
@@ -52,12 +52,12 @@ async function codemod(root: SgRoot<Cpp | Rust>): Promise<string | null> {
   const source = root.root().text();
 
   // src/runtime/lib.rs: the runtime crate root, identified by its module list.
-  if (source.includes("pub mod dispatch;") && source.includes("pub mod hw_exports;")) {
+  if (source.includes("pub(crate) mod dispatch;") && source.includes("pub(crate) mod hw_exports;")) {
     return patchRuntimeLib(root);
   }
-  // src/bundler/transpiler.rs: the plugin pre-filter.
+  // src/jsc/ModuleLoader.rs: the plugin pre-filter.
   if (source.includes("fn could_be_plugin(")) {
-    return patchTranspiler(root);
+    return patchModuleLoader(root);
   }
   // src/jsc/bindings/ZigGlobalObject.cpp: the per-module `import.meta` factory.
   if (source.includes("GlobalObject::moduleLoaderCreateImportMetaProperties")) {
@@ -69,46 +69,46 @@ async function codemod(root: SgRoot<Cpp | Rust>): Promise<string | null> {
 function patchRuntimeLib(root: SgRoot<Rust>): string | null {
   return applyJssgNodePatches(root, [
     {
-      contains: "pub mod dispatch;",
+      contains: "pub(crate) mod dispatch;",
       kinds: ["mod_item"],
       replacements: [
         {
-          from: "pub mod dispatch;",
+          from: "pub(crate) mod dispatch;",
           marker: MARKER,
-          to: `pub mod dispatch;
+          to: `pub(crate) mod dispatch;
 // ${MARKER} the \`bun_embed_*\` C ABI rbun links against (process init, VM
 // creation, event-loop ticking, promise helpers). Source lives in
 // rbun/packages/dev/improve/rbun/configs/patching/codemods/bun/files/src/runtime/embed.rs.
-pub mod embed;`,
+pub(crate) mod embed;`,
         },
       ],
     },
   ]);
 }
 
-function patchTranspiler(root: SgRoot<Rust>): string | null {
+function patchModuleLoader(root: SgRoot<Rust>): string | null {
   return applyJssgNodePatches(root, [
     {
       contains: "fn could_be_plugin(specifier: &[u8]) -> bool {",
       kinds: ["function_item"],
       replacements: [
         {
-          from: `        !bun_paths::is_absolute(specifier)
-            && bun_core::strings::index_of_char_usize(specifier, b':').is_some()
+          from: `    !bun_paths::is_absolute(specifier)
+        && bun_core::strings::index_of_char_usize(specifier, b':').is_some()
 `,
           marker: MARKER,
-          to: `        // ${MARKER} upstream only forwards \`ns:\` specifiers here, so a bare
-        // name such as \`chord\` never reaches a runtime \`onResolve\` hook.
-        // Embedders using rbun's \`Resolver\` (modelled on rquickjs, whose
-        // resolvers see every specifier) need bare names too, so forward
-        // everything that is neither absolute nor relative. The hook still
-        // returns \`undefined\` for names it does not own, falling through to
-        // bun's regular resolution.
-        !bun_paths::is_absolute(specifier)
-            && !(specifier.starts_with(b"./")
-                || specifier.starts_with(b"../")
-                || specifier == b"."
-                || specifier == b"..")
+          to: `    // ${MARKER} upstream only forwards \`ns:\` specifiers here, so a bare
+    // name such as \`chord\` never reaches a runtime \`onResolve\` hook.
+    // Embedders using rbun's \`Resolver\` (modelled on rquickjs, whose
+    // resolvers see every specifier) need bare names too, so forward
+    // everything that is neither absolute nor relative. The hook still
+    // returns \`undefined\` for names it does not own, falling through to
+    // bun's regular resolution.
+    !bun_paths::is_absolute(specifier)
+        && !(specifier.starts_with(b"./")
+            || specifier.starts_with(b"../")
+            || specifier == b"."
+            || specifier == b"..")
 `,
         },
       ],
@@ -135,7 +135,7 @@ function patchImportMeta(root: SgRoot<Cpp>): string | null {
       kinds: ["function_definition"],
       replacements: [
         {
-          from: `    return Zig::ImportMetaObject::create(globalObject, key);`,
+          from: `    return importMeta;`,
           marker: MARKER,
           to: `    // ${MARKER} JSC caches whatever this hook returns as the module's
     // \`import.meta\`, and JavaScriptCore exposes no public getter for that
@@ -143,14 +143,13 @@ function patchImportMeta(root: SgRoot<Cpp>): string | null {
     // rquickjs' \`Module::meta\` wraps). Handing the fresh object to the
     // embedder here is therefore the only place a host can attach its own
     // properties to a module's real \`import.meta\`.
-    JSC::JSObject* meta = Zig::ImportMetaObject::create(globalObject, key);
     if (bun_embed_import_meta_callback != nullptr) {
         bun_embed_import_meta_callback(
             reinterpret_cast<void*>(globalObject),
             JSC::JSValue::encode(key),
-            JSC::JSValue::encode(JSC::JSValue(meta)));
+            JSC::JSValue::encode(JSC::JSValue(importMeta)));
     }
-    return meta;`,
+    return importMeta;`,
         },
       ],
     },

@@ -4,13 +4,13 @@
  *
  * Reuses the exact object/archive list of the executable link edge that
  * `bun run build --profile=release` wrote into `build/release/build.ninja`
- * (so the C++ objects, `libbun_runtime.a`, WebKit and every dependency
+ * (so the C++ objects, Rust runtime, WebKit and every dependency
  * archive are byte-identical to the CLI build) and relinks them as a dylib:
  *
  *   - `-dynamiclib` + `@rpath` install name
  *   - executable-only flags dropped (`-stack_size`, order file, linker map,
  *     the NAPI/V8 `symbols.txt` export list)
- *   - `libbun_runtime.a` force-loaded so `bun_embed_*` survive archive
+ *   - the `libbun_runtime` archive force-loaded so `bun_embed_*` survive archive
  *     extraction (nothing in the C++ side references them)
  *   - every JavaScriptCore public C API symbol (`_JS*`, unmangled) pulled
  *     in with `-u` and exported, plus `_bun_embed_*` and `_napi_*`/`_node_*`
@@ -37,35 +37,30 @@ const ninja = await Bun.file(join(buildDir, "build.ninja")).text();
 
 // ─── Locate the executable link edge ───
 // `build <exe> | <map>: link a.o b.o $\n    c.o ... $\n    lib.a\n  ldflags = ...`
-const lines = ninja.split("\n");
+// Ninja can wrap the output list and the rule name as well as the inputs.
+const lines = ninja.replace(/\$\r?\n[ \t]*/g, "").split(/\r?\n/);
 const start = lines.findIndex(l => /^build bun(-profile|-debug|-asan)?( \||:)/.test(l) && l.includes(": link "));
 if (start < 0) throw new Error("could not find the bun link edge in build.ninja");
-let edge = "";
-let i = start;
-for (; i < lines.length; i++) {
-  const line = lines[i];
-  edge += line.replace(/\$$/, "") + " ";
-  if (!line.endsWith("$")) break;
-}
+const edge = lines[start];
 let ldflags = "";
-for (let j = i + 1; j < lines.length && lines[j].startsWith("  "); j++) {
+for (let j = start + 1; j < lines.length && lines[j].startsWith("  "); j++) {
   const m = /^  ldflags = (.*)$/.exec(lines[j]);
   if (m) ldflags = m[1];
 }
 const inputsText = edge.slice(edge.indexOf(": link ") + ": link ".length);
-// Explicit inputs only (before `|` / `||`).
+// Explicit inputs only (before implicit, order-only, or validation inputs).
 const inputs = inputsText
   .split(/\s+/)
   .filter(Boolean)
   .filter((t, idx, arr) => {
-    const bar = arr.findIndex(x => x === "|" || x === "||");
+    const bar = arr.findIndex(x => x === "|" || x === "||" || x === "|@");
     return bar < 0 || idx < bar;
   })
   .map(t => t.replace(/\$ /g, " "))
   .map(t => (isAbsolute(t) ? t : resolve(buildDir, t)));
 
-const rustLib = inputs.find(p => p.endsWith("libbun_runtime.a"));
-if (!rustLib) throw new Error("libbun_runtime.a not among link inputs");
+const rustLib = inputs.find(p => /\/libbun_runtime(?:-[a-f0-9]+\.rlib|\.a)$/.test(p));
+if (!rustLib) throw new Error("libbun_runtime archive not among link inputs");
 const jscLib = inputs.find(p => p.endsWith("libJavaScriptCore.a"));
 if (!jscLib) throw new Error("libJavaScriptCore.a not among link inputs");
 const linkInputs = inputs.filter(p => p !== rustLib);
@@ -84,8 +79,14 @@ for (let k = 0; k < rawFlags.length; k++) {
   keptFlags.push(f);
 }
 
+const cxxMatch = /clang\+\+/.test(ninja) ? /(\S*clang\+\+)/.exec(ninja)?.[1] : undefined;
+const cxx = process.env.CXX ?? cxxMatch ?? "clang++";
+
 // ─── Exported symbols ───
-const nm = Bun.spawnSync(["nm", "-gU", jscLib], {
+// Use the matching LLVM tools to read WebKit's LTO bitcode.
+const llvmNm = join(dirname(cxx), "llvm-nm");
+const nmCommand = process.env.NM ?? ((await Bun.file(llvmNm).exists()) ? llvmNm : "nm");
+const nm = Bun.spawnSync([nmCommand, "-gU", jscLib], {
   stdin: "ignore",
   stdout: "pipe",
   stderr: "pipe",
@@ -94,9 +95,11 @@ const nm = Bun.spawnSync(["nm", "-gU", jscLib], {
 if (nm.exitCode !== 0) throw new Error(`nm failed: ${nm.stderr.toString()}`);
 const jscApi = new Set<string>();
 for (const line of nm.stdout.toString().split("\n")) {
-  const m = /^[0-9a-f]+ T (_JS[A-Z][A-Za-z0-9]*)$/.exec(line);
+  // LLVM bitcode symbols have no address and llvm-nm prints dashes instead.
+  const m = /^(?:[0-9a-f]+|-+) T (_JS[A-Z][A-Za-z0-9]*)$/.exec(line);
   if (m) jscApi.add(m[1]);
 }
+if (jscApi.size === 0) throw new Error("no JavaScriptCore C API symbols found in libJavaScriptCore.a");
 const embedSyms = [
   "_bun_embed_run_internal_process_mode",
   "_bun_embed_init",
@@ -133,9 +136,6 @@ await Bun.write(exportsFile, exports.join("\n") + "\n");
 // ─── Link ───
 const rsp = join(buildDir, `${outName}.rsp`);
 await Bun.write(rsp, linkInputs.join("\n") + "\n");
-
-const cxxMatch = /clang\+\+/.test(ninja) ? /(\S*clang\+\+)/.exec(ninja)?.[1] : undefined;
-const cxx = process.env.CXX ?? cxxMatch ?? "clang++";
 
 const cmd = [
   cxx,

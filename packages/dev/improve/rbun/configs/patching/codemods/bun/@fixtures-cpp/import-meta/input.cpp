@@ -8,7 +8,9 @@ JSC::JSObject* GlobalObject::moduleLoaderCreateImportMetaProperties(JSGlobalObje
     JSModuleRecord* record,
     RefPtr<JSC::ScriptFetcher>)
 {
-    return Zig::ImportMetaObject::create(globalObject, key);
+    auto* importMeta = Zig::ImportMetaObject::create(globalObject, key);
+    importMeta->setModuleGraph(globalObject->vm(), Bun::moduleGraphOfLoader(globalObject, loader));
+    return importMeta;
 }
 
 } // namespace Zig

@@ -1,9 +1,9 @@
 //! The `bun_runtime` crate root (trimmed fixture).
 #[path = "api.rs"]
-pub mod api;
-pub mod dispatch;
-pub mod hw_exports;
-pub mod ipc;
-pub mod timer;
+pub(crate) mod api;
+pub(crate) mod dispatch;
+pub(crate) mod hw_exports;
+pub(crate) mod ipc;
+pub(crate) mod timer;
 
-pub mod generated_classes; // include!()s ${BUN_CODEGEN_DIR}/generated_classes.rs
+pub(crate) mod generated_classes; // include!()s ${BUN_CODEGEN_DIR}/generated_classes.rs

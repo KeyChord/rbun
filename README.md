@@ -44,7 +44,7 @@ The generated `bun.gen.patch` there is the reviewable source-to-dist diff.
 
 ```sh
 # macOS prerequisites
-brew install llvm@21 automake ccache cmake coreutils gnu-sed go icu4c libiconv libtool ninja pkg-config ruby
+brew install llvm@23 automake ccache cmake coreutils gnu-sed go icu4c libiconv libtool ninja pkg-config ruby
 curl -fsSL https://bun.com/install | bash          # a release bun drives bun's build
 git submodule update --init --recursive
 
@@ -228,9 +228,9 @@ _run-upstream-bun-tests run portable-runtime [substring]
 _run-upstream-bun-tests run runtime-subprocess [substring]
 ```
 
-At pinned Bun 1.4.2 revision `744846f84`, classification finds 1,027 Bun/Node/Web test
-files: 463 in-process, 466 runtime-subprocess, 43 mixed runtime/CLI, and 55
-CLI-only. Thus 564 files call `bunExe()`/`bunRun()`; the 466 runtime-only files
+At pinned Bun 1.4.3 revision `c6da4a4d3`, classification finds 1,078 Bun/Node/Web test
+files: 465 in-process, 502 runtime-subprocess, 52 mixed runtime/CLI, and 59
+CLI-only. Thus 613 files call `bunExe()`/`bunRun()`; the 502 runtime-only files
 are the broad subprocess target, while mixed and CLI files stay out until
 their CLI cases can be separated. At the previous revision `69c613875`, the
 curated suites validated 780 unchanged upstream tests and 9,705 `expect()` calls: all 224 `Bun.Image`

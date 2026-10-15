@@ -24,12 +24,18 @@
       "bin": {
         "_build-bun": "./_build-bun.ts",
       },
+      "dependencies": {
+        "citty": "^0.2.2",
+      },
     },
     "packages/dev/improve/rbun/configs/bun/testing": {
       "name": "@rbun/dev.improve.rbun.configs.bun.testing",
       "version": "0.0.0",
       "bin": {
         "_run-upstream-bun-tests": "./_run-upstream-bun-tests.ts",
+      },
+      "dependencies": {
+        "citty": "^0.2.2",
       },
     },
     "packages/dev/improve/rbun/configs/patching": {
@@ -78,6 +84,8 @@
     "@rbun/dev.improve.rbun.configs.patching": ["@rbun/dev.improve.rbun.configs.patching@workspace:packages/dev/improve/rbun/configs/patching"],
 
     "@rbun/dev.improve.rbun.configs.patching.codemods.bun": ["@rbun/dev.improve.rbun.configs.patching.codemods.bun@workspace:packages/dev/improve/rbun/configs/patching/codemods/bun"],
+
+    "citty": ["citty@0.2.2", "", {}, "sha512-+6vJA3L98yv+IdfKGZHBNiGW5KHn22e/JwID0Strsz8h4S/csAu/OuICwxrg44k5MRiZHWIo8XXuJgQTriRP4w=="],
 
     "codemod": ["codemod@1.15.3", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "@codemod.com/cli-darwin-arm64": "1.15.3", "@codemod.com/cli-darwin-x64": "1.15.3", "@codemod.com/cli-linux-arm64-gnu": "1.15.3", "@codemod.com/cli-linux-arm64-musl": "1.15.3", "@codemod.com/cli-linux-x64-gnu": "1.15.3", "@codemod.com/cli-linux-x64-musl": "1.15.3", "@codemod.com/cli-win32-x64-msvc": "1.15.3" }, "bin": { "codemod": "codemod" } }, "sha512-Cu/FCzj7CLN2DtOkqaIgfW8mVnrNlGdN4mGyfr6vxqVJPqBDMk0s27NBh5EKPiW2EUXm8k6Kwh2NvKDAkUfWRw=="],
 

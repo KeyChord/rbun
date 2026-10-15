@@ -1,7 +1,7 @@
 /**
  * Build the vendored Bun and link libbun_embed.dylib.
  *
- * Requirements (macOS): brew install llvm@21 automake ccache cmake coreutils
+ * Requirements (macOS): brew install llvm@23 automake ccache cmake coreutils
  * gnu-sed go icu4c libiconv libtool ninja pkg-config ruby, rustup (the
  * pinned nightly in packages/com/github/oven-sh/bun/dist/rust-toolchain.toml is installed on demand),
  * and a release `bun` on PATH.
