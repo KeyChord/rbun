@@ -1,5 +1,8 @@
 # Bun patch configuration
 
+> [!NOTE]
+> This document is largely AI-written, so parts of it may not be fully accurate. It will be replaced with a hand-written version when I get the time.
+
 rbun's changes to Bun live here as a
 [JSSG](https://docs.codemod.com/jssg) codemod plus verbatim added files. The
 upstream source itself is the Git submodule at
@@ -19,22 +22,23 @@ packages/dev/improve/rbun/configs/patching/
     patch.json            upstream, dist target, edited bundles, added files
     codemod.ts            JSSG transformation
     files/<path>          files copied verbatim into dist/<path>
-    @fixtures/<case>/     codemod input/expected fixtures
+    @fixtures/<case>/     Rust codemod input/expected fixtures
+    @fixtures-cpp/<case>/ C++ codemod input/expected fixtures
 ```
 
 ## Commands
 
 Run these from the rbun repository root after `bun install` (which links the
-`_vendor` bin). They require `bun`, `git`, and `rsync`.
+`_vendor` bin into `node_modules/.bin`). They require `bun`, `git`, and `rsync`.
 
 | Command | Effect |
 | --- | --- |
 | `git submodule update --init --recursive` | Initialize the pinned pristine Bun checkout. `_vendor` also initializes its direct submodule automatically. |
-| `_vendor generate` | Synchronize `src/` into `dist/`, preserve excluded local build state, apply every patch, and rewrite `bun.gen.patch`. |
-| `_vendor check` | Generate an independent scratch distribution and verify both `dist/` and `bun.gen.patch` byte-for-byte. |
-| `_vendor diff` | Rewrite only the review patch from the current `src/` and `dist/`. |
-| `_vendor update <ref>` | Fetch and detach the source submodule at `<ref>`, then generate `dist/`. Commit the resulting outer-repository gitlink change. |
-| `_vendor test` | Run the codemod fixture suite. |
+| `bun run _vendor generate` | Synchronize `src/` into `dist/`, preserve excluded local build state, apply every patch, and rewrite `bun.gen.patch`. |
+| `bun run _vendor check` | Generate an independent scratch distribution and verify both `dist/` and `bun.gen.patch` byte-for-byte. |
+| `bun run _vendor diff` | Rewrite only the review patch from the current `src/` and `dist/`. |
+| `bun run _vendor update <ref>` | Fetch and detach the source submodule at `<ref>`, then generate `dist/` and `bun.gen.patch`. Commit the resulting outer-repository gitlink change. |
+| `bun run _vendor test` | Run the codemod fixture suite. |
 
 `generate` omits upstream `test/` and `bench/` from `dist/` because the pristine
 submodule already carries them. It preserves `build/`, `node_modules/`,
@@ -42,7 +46,7 @@ submodule already carries them. It preserves `build/`, `node_modules/`,
 local build state. The generated source itself is ignored by Git; only the
 submodule pin, patch configuration, and review diff are committed.
 
-After generating, run `_build-bun` and `cargo test`.
+After generating, run `bun run _build-bun` and `cargo test`.
 
 ## Upstream drift
 
@@ -50,7 +54,7 @@ Every replacement is anchored on exact upstream source inside a structurally
 selected node and carries an `[rbun patch]` marker for idempotency. When Bun
 changes an anchor, the codemod throws `JSSG patch anchor drifted` instead of
 silently emitting an incomplete distribution. Update `codemods/bun/codemod.ts`
-and its fixtures, run `_vendor test`, then regenerate.
+and its fixtures, run `bun run _vendor test`, then regenerate.
 
 The `files/` tree contains the `bun_embed_*` C ABI implementation and the
 `libbun_embed` link script. Edit those canonical copies here; never edit

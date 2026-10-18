@@ -1,5 +1,8 @@
 # rbun
 
+> [!NOTE]
+> This document is largely AI-written, so parts of it may not be fully accurate. It will be replaced with a hand-written version when I get the time.
+
 Embed [Bun](https://bun.com)'s JavaScript runtime in Rust with an API modelled
 on [rquickjs](https://docs.rs/rquickjs): `Runtime` / `Context` / `Ctx`,
 `Value` / `Object` / `Function` / `Promise` / `Array` / `String`,
@@ -11,6 +14,90 @@ The engine is JavaScriptCore with Bun's event loop, module loader (TypeScript,
 JSX, `node:*`, `bun:*`, `node_modules`), and Bun / Node runtime APIs. Values
 are handled through JavaScriptCore's public C API; the runtime is Bun's own
 Rust code (Bun ≥ 1.4 is written in Rust) linked as `libbun_embed.dylib`.
+
+rbun is the JavaScript runtime embedded in
+[Chord](https://github.com/KeyChord/Chord).
+
+## Status
+
+- **macOS only.** Bun is linked as the shared library `libbun_embed.dylib`,
+  and rbun's link step only produces the macOS dylib.
+- **Bun 1.4.3** is the pinned upstream revision (`oven-sh/bun` commit
+  `c6da4a4d3010`).
+- **Not published on crates.io.** Depend on a checkout of this repository by
+  path.
+- **Prebuilt dylibs:** CI publishes `libbun_embed.dylib` as GitHub release
+  assets. For the current Bun pin only the Apple Silicon (`aarch64`) build is
+  published, because the Intel (`x86_64`) CI build currently exceeds GitHub
+  Actions' 6-hour job limit. On an Intel Mac, build the dylib from source.
+
+## Using rbun
+
+### Add the dependency
+
+```sh
+git clone https://github.com/KeyChord/rbun
+```
+
+```toml
+# Cargo.toml of a crate next to the rbun checkout
+[dependencies]
+rbun = { path = "../rbun/crates/rbun" }
+```
+
+Chord depends on rbun the same way. The default `macro` feature provides
+`#[rbun::class]` and `#[rbun::methods]`. A plain clone is enough when you link a
+prebuilt dylib; the Bun submodule is only needed to build Bun itself.
+
+### Get `libbun_embed.dylib`
+
+rbun's build script links `libbun_embed.dylib` from `RBUN_BUN_LIB_DIR` or, when
+that is unset, from the checkout's
+`packages/com/github/oven-sh/bun/dist/build/release/` (where a
+[local build](#building-libbun_embeddylib) puts it). If the file is missing,
+the build fails with instructions.
+
+To use a prebuilt dylib instead, download the release that matches the
+checkout's pinned Bun commit. The `build-bun-embed` workflow tags each release
+`bun-embed-<first 12 characters of that commit>` and names the assets
+`libbun_embed-<arch>-apple-darwin.dylib`:
+
+```sh
+cd rbun
+sha="$(git ls-tree HEAD packages/com/github/oven-sh/bun/src | awk '{print $3}')"
+dir="$HOME/.cache/rbun/bun-embed-${sha:0:12}"
+mkdir -p "$dir"
+curl -fL -o "$dir/libbun_embed.dylib" \
+  "https://github.com/KeyChord/rbun/releases/download/bun-embed-${sha:0:12}/libbun_embed-aarch64-apple-darwin.dylib"
+export RBUN_BUN_LIB_DIR="$dir"
+```
+
+The asset has to be saved as `libbun_embed.dylib`, the file name the build
+script looks for.
+
+### Link it
+
+rbun passes the dylib's directory to the build script of every crate that
+depends on it directly, as `DEP_BUN_EMBED_LIB_DIR`. The dylib's install name is
+`@rpath/libbun_embed.dylib`, so an executable needs an rpath to that directory.
+rbun adds one for its own tests and examples only; add it for yours in
+`build.rs`:
+
+```rust
+fn main() {
+    if let Ok(dir) = std::env::var("DEP_BUN_EMBED_LIB_DIR") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
+    }
+}
+```
+
+An app you distribute has to ship the dylib and set an rpath to its bundled
+copy. Chord, for example, bundles it in `Contents/Frameworks` and links with
+`-Wl,-rpath,@executable_path/../Frameworks`.
+
+### Example
+
+This needs `tokio` with the `rt` and `macros` features:
 
 ```rust
 use rbun::prelude::*;
@@ -33,7 +120,14 @@ async fn main() -> rbun::Result<()> {
 }
 ```
 
-## Building
+Call `rbun::run_internal_process_mode()` first in `main` (see
+[Compared with the Bun executable](#compared-with-the-bun-executable)). Each
+thread gets one Bun VM that is never torn down (see
+[Compared with rquickjs](#compared-with-rquickjs)).
+`cargo run --example smoke` exercises more of the API, including classes,
+native modules, and a custom resolver and loader.
+
+## Building `libbun_embed.dylib`
 
 rbun links `packages/com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib`.
 Pristine upstream Bun is pinned as the `packages/com/github/oven-sh/bun/src` Git
@@ -45,28 +139,43 @@ The generated `bun.gen.patch` there is the reviewable source-to-dist diff.
 ```sh
 # macOS prerequisites
 brew install llvm@23 automake ccache cmake coreutils gnu-sed go icu4c libiconv libtool ninja pkg-config ruby
+brew install nasm                                    # Intel Macs only
 curl -fsSL https://bun.com/install | bash          # a release bun drives bun's build
+# plus rustup (https://rustup.rs); the build installs Bun's pinned nightly with it
 git submodule update --init --recursive
 
-vp i
+bun install
 
-vpx _build-bun                                           # ~20 min cold; installs the pinned nightly via rustup
+bun run _build-bun                                           # ~20 min cold; installs the pinned nightly via rustup
 
 cargo test                                           # Rust API + Bun differential compatibility suites
 ```
 
+`bun install` links the workspace bins `_vendor`, `_build-bun`, and
+`_run-upstream-bun-tests` into `node_modules/.bin`; `bun run <bin>` runs them.
 `_build-bun` runs `_vendor generate` before building, so a normal
-build always consumes the pinned submodule plus the declared patches.
+build always consumes the pinned submodule plus the declared patches. It
+writes both `libbun_embed.dylib` and the matching `bun` executable to
+`packages/com/github/oven-sh/bun/dist/build/release/`.
 
-`RBUN_BUN_LIB_DIR` overrides where the dylib is looked up. Binaries that link
-rbun need an rpath to it (rbun's own examples/tests get one; a dependent
-crate's `build.rs` can read `DEP_BUN_EMBED_LIB_DIR`).
+### Running the tests
+
+`cargo test` runs the Rust API tests in `crates/rbun/tests/`, the doc tests,
+and the [differential suite](#bun-differential-compatibility-suite). Two of
+those tests, `bun_runtime_compatibility` and
+`one_shot_runtime_host_matches_bun_process_identity_and_lifecycle`, compare
+against the reference `bun` executable from a local `_build-bun` build. With
+only a prebuilt dylib, skip them:
+
+```sh
+cargo test -- --skip bun_runtime_compatibility --skip one_shot_runtime_host
+```
 
 ### Upgrading Bun
 
 ```sh
-_vendor update <sha|tag|branch>
-_build-bun && cargo test
+bun run _vendor update <sha|tag|branch>
+bun run _build-bun && cargo test
 ```
 
 If an upstream change moved one of the patch anchors the codemod fails loudly
@@ -156,8 +265,8 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
   replacer/space, and private-key filtering. Use JavaScript's `JSON` methods
   directly when replacer, reviver, or spacing behavior is required.
 - **Promise rejection tracking:** `set_host_promise_rejection_tracker` stores
-  the callback but Bun does not invoke it for engine-level unhandled
-  rejections; use `process.on("unhandledRejection")`.
+  the callback but rbun never invokes it; Bun reports unhandled rejections
+  itself, so use `process.on("unhandledRejection")`.
 
 ### Compared with the Bun executable
 
@@ -179,17 +288,18 @@ it is not a drop-in replacement for every rquickjs or Bun executable feature.
   start of an embedding executable. On macOS, `Bun.WebView` re-executes that
   executable with a private environment marker; this hook transfers the child
   to Bun's native WebKit host loop before argument parsing or JSC startup.
-- **Platform support.** The current shared-library build/link workflow is
-  macOS-only (`libbun_embed.dylib`). Bun itself supports more platforms, but
-  rbun's embedding link script has not yet been ported to them.
+- **Platform support.** The shared-library build/link workflow is macOS-only:
+  rbun's embedding link script (`embed-dylib.ts`) only produces
+  `libbun_embed.dylib`, although Bun itself supports more platforms.
 
 ## Bun differential compatibility suite
 
-`tests/bun_compat.rs` runs 32 hermetic JS/TS fixtures in fresh processes under
-both the same-commit vendored Bun executable and rbun's production embedding
-path. It compares exit status, stdout/stderr, and filesystem side effects.
-Unlisted differences fail; intentional embedding differences are locked to
-exact snapshots in `compat/expected-deviations.json`.
+`crates/rbun/tests/bun_compat.rs` runs 32 hermetic JS/TS fixtures in fresh
+processes under both the same-commit vendored Bun executable and rbun's
+production embedding path. It compares exit status, stdout/stderr, and
+filesystem side effects. Unlisted differences fail; intentional embedding
+differences are locked to exact snapshots in `compat/expected-deviations.json`.
+The reference executable comes from a local `_build-bun` build.
 
 ```sh
 cargo test --test bun_compat -- --nocapture
@@ -215,30 +325,27 @@ submodule, runs each file once with the matching Bun built in `dist/` and once
 with embedded rbun, and requires both success plus identical summary counters:
 
 ```sh
-_run-upstream-bun-tests sync
-_run-upstream-bun-tests classify
+bun run _run-upstream-bun-tests sync
+bun run _run-upstream-bun-tests classify
 
-_run-upstream-bun-tests run image
-_run-upstream-bun-tests run webview-webkit       # macOS/WebKit
-_run-upstream-bun-tests run runtime-smoke
-_run-upstream-bun-tests run runtime-subprocess-smoke
+bun run _run-upstream-bun-tests run image
+bun run _run-upstream-bun-tests run webview-webkit       # macOS/WebKit
+bun run _run-upstream-bun-tests run runtime-smoke
+bun run _run-upstream-bun-tests run runtime-subprocess-smoke
 
 # Broad, environment-dependent sweeps; optional substring narrows either set.
-_run-upstream-bun-tests run portable-runtime [substring]
-_run-upstream-bun-tests run runtime-subprocess [substring]
+bun run _run-upstream-bun-tests run portable-runtime [substring]
+bun run _run-upstream-bun-tests run runtime-subprocess [substring]
 ```
 
 At pinned Bun 1.4.3 revision `c6da4a4d3`, classification finds 1,078 Bun/Node/Web test
 files: 465 in-process, 502 runtime-subprocess, 52 mixed runtime/CLI, and 59
 CLI-only. Thus 613 files call `bunExe()`/`bunRun()`; the 502 runtime-only files
-are the broad subprocess target, while mixed and CLI files stay out until
-their CLI cases can be separated. At the previous revision `69c613875`, the
-curated suites validated 780 unchanged upstream tests and 9,705 `expect()` calls: all 224 `Bun.Image`
-tests, all 59 WebKit `Bun.WebView` tests, 455 cross-runtime smoke tests, and 42
-runtime-subprocess tests.
+are the broad subprocess target, while mixed and CLI files are excluded
+because they invoke Bun's package-manager, bundler, or test CLI subcommands.
 
-Those results are strong evidence for the covered surfaces, not proof that
-every Bun program is identical. The broad sets contain platform-, service-,
+Passing suites are strong evidence for the covered surfaces, not proof that
+every Bun program behaves identically. The broad sets contain platform-, service-,
 privilege-, fixture-, and dependency-sensitive tests; the harness reports a
 reference failure rather than treating two unavailable/broken executions as
 compatible. Named suites and classification policy live in
@@ -246,11 +353,12 @@ compatible. Named suites and classification policy live in
 
 ## Benchmarks
 
-`cargo bench` runs `benches/compare.rs`, a criterion suite that drives
+`cargo bench` runs `crates/rbun/benches/compare.rs`, a criterion suite that drives
 rquickjs 0.11 and rbun through the same workloads (each engine on its own
 thread; rbun's one-time VM boot is printed once and excluded). Numbers below
-are from an Apple Silicon Mac, `--profile=release` Bun, 30 samples × 3 s; the
-last column is rbun's time relative to rquickjs (lower is better).
+are from an Apple Silicon Mac, `--profile=release` Bun, 30 samples × 3 s,
+measured in August 2026 against an earlier Bun revision than the current pin;
+the last column is rbun's time relative to rquickjs (lower is better).
 
 | Benchmark | What it measures | rquickjs | rbun | rbun / rquickjs |
 | --- | --- | ---: | ---: | ---: |
@@ -292,7 +400,9 @@ Reading the table:
   upstream tests and the source revision come directly from this tree.
 - `packages/com/github/oven-sh/bun/dist/` — ignored generated build input and local Bun
   artifacts. `_vendor` recreates it from `src/`, then adds the embedding C
-  ABI/linker files and applies the two source transformations.
+  ABI/linker files and applies the codemod's source patches (three files).
 - `packages/dev/improve/rbun/configs/patching/` — canonical JSSG codemod, added files,
   fixtures, dependencies, and generated `bun.gen.patch` review diff.
 - `packages/dev/improve/rbun/configs/bun/` — `_build-bun` and upstream test harness bins.
+- `.github/workflows/build-bun-embed.yaml` — builds `libbun_embed.dylib` on
+  macOS runners and publishes it to the `bun-embed-<sha>` release.

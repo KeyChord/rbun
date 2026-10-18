@@ -1,11 +1,15 @@
 # Bun differential compatibility suite
 
+> [!NOTE]
+> This document is largely AI-written, so parts of it may not be fully accurate. It will be replaced with a hand-written version when I get the time.
+
 This suite runs the same fixture in two fresh processes and compares the
 observable result:
 
-1. `packages/com/github/oven-sh/bun/dist/build/release/bun`, built from the pristine
-   Bun submodule at `packages/com/github/oven-sh/bun/src`, using `reference-driver.mjs`
-   to dynamically import the fixture.
+1. `packages/com/github/oven-sh/bun/dist/build/release/bun`, built by `_build-bun`
+   from the generated `dist/` tree (the Bun submodule pinned at
+   `packages/com/github/oven-sh/bun/src` plus rbun's patches), using
+   `reference-driver.mjs` to dynamically import the fixture.
 2. `rbun-compat-host`, which initializes rbun through its production
    `Runtime` / `Module::import` path, waits for module evaluation and event-loop
    work, and mirrors `process.exitCode`.
@@ -17,10 +21,12 @@ Only CRLF and the two different temporary-root paths are normalized.
 
 ## Run it
 
-Build the vendored Bun and dylib first, then run:
+Build the vendored Bun and dylib first (a downloaded prebuilt dylib is not
+enough, because the reference executable comes from the same local build),
+then run:
 
 ```sh
-_build-bun
+bun run _build-bun
 cargo test --test bun_compat -- --nocapture
 ```
 
@@ -67,7 +73,7 @@ comment when the case is substantially derived from one upstream test.
 
 `expected-deviations.json` is an exact, reviewable allowlist. An entry names
 the differing observation fields and snapshots the reference and candidate
-values for those fields. The suite fails when:
+values for those fields, plus a `reason`. The suite fails when:
 
 - an unlisted difference appears;
 - an expected value changes;
@@ -100,13 +106,19 @@ both processes succeed and their pass/fail/skip/todo, assertion, file, and
 unhandled-error counts match exactly.
 
 ```sh
-_run-upstream-bun-tests sync
-_run-upstream-bun-tests classify
-_run-upstream-bun-tests run image
-_run-upstream-bun-tests run webview-webkit
-_run-upstream-bun-tests run runtime-smoke
-_run-upstream-bun-tests run runtime-subprocess-smoke
+bun run _run-upstream-bun-tests sync
+bun run _run-upstream-bun-tests classify
+bun run _run-upstream-bun-tests run image
+bun run _run-upstream-bun-tests run webview-webkit
+bun run _run-upstream-bun-tests run runtime-smoke
+bun run _run-upstream-bun-tests run runtime-subprocess-smoke
 ```
+
+`run` builds `rbun-test-host` with `cargo build` first. These environment
+variables override its inputs: `RBUN_UPSTREAM_BUN_DIR` (another checkout of the
+pinned Bun revision to read `test/` from; `sync` creates or updates it as a
+sparse checkout), `RBUN_REFERENCE_BUN`, `RBUN_TEST_HOST`, and
+`RBUN_UPSTREAM_TIMEOUT_MS` (timeout for each test process, default 120000 ms).
 
 The two broad suites are `portable-runtime` (no visible `bunExe()` call) and
 `runtime-subprocess` (runtime-only child Bun calls). They can be narrowed with
