@@ -24,8 +24,9 @@ rbun is the JavaScript runtime embedded in
   and rbun's link step only produces the macOS dylib.
 - **Bun 1.4.4** is the pinned upstream revision (`oven-sh/bun` commit
   `38afee6c84fc`).
-- **Not published on crates.io.** Depend on a checkout of this repository by
-  path.
+- **Rust crates:** [`rbun`](https://crates.io/crates/rbun) and
+  [`rbun-macros`](https://crates.io/crates/rbun-macros) are published as `0.1.0`.
+  The native Bun library is distributed separately.
 - **Prebuilt dylibs:** CI publishes `libbun_embed.dylib` as GitHub release
   assets. For the current Bun pin only the Apple Silicon (`aarch64`) build is
   published, targeting macOS 13 or newer. Homebrew no longer supplies an Intel
@@ -37,19 +38,15 @@ rbun is the JavaScript runtime embedded in
 
 ### Add the dependency
 
-```sh
-git clone https://github.com/KeyChord/rbun
-```
-
 ```toml
-# Cargo.toml of a crate next to the rbun checkout
 [dependencies]
-rbun = { path = "../rbun/crates/rbun" }
+rbun = "0.1.0"
 ```
 
-Chord depends on rbun the same way. The default `macro` feature provides
-`#[rbun::class]` and `#[rbun::methods]`. A plain clone is enough when you link a
-prebuilt dylib; the Bun submodule is only needed to build Bun itself.
+The default `macro` feature provides `#[rbun::class]` and `#[rbun::methods]`.
+For local development, clone this repository and use
+`rbun = { path = "../rbun/crates/rbun" }` instead, as Chord does. The Bun
+submodule is only needed to build Bun itself.
 
 ### Get `libbun_embed.dylib`
 
@@ -60,13 +57,12 @@ that is unset, from the checkout's
 the build fails with instructions.
 
 To use a prebuilt dylib instead, download the release that matches the
-checkout's pinned Bun commit. The `build-bun-embed` workflow tags each release
+crate's pinned Bun commit. The `build-bun-embed` workflow tags each release
 `bun-embed-<first 12 characters of that commit>` and names the assets
 `libbun_embed-<arch>-apple-darwin.dylib`:
 
 ```sh
-cd rbun
-sha="$(git ls-tree HEAD packages/com/github/oven-sh/bun/src | awk '{print $3}')"
+sha="38afee6c84fcf48c0edb2466aa4b27d287a59c30" # rbun 0.1.0 / Bun 1.4.4
 dir="$HOME/.cache/rbun/bun-embed-${sha:0:12}"
 mkdir -p "$dir"
 curl -fL -o "$dir/libbun_embed.dylib" \
