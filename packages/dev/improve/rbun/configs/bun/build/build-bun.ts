@@ -55,9 +55,12 @@ function buildEnv(): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   // Bun bakes the enclosing repo's HEAD into the binary; report the source
   // submodule commit rather than rbun's outer repository commit.
-  if (!process.env.GIT_SHA) {
-    env.GIT_SHA = gitSha();
-  }
+  const sha = process.env.GIT_SHA ?? gitSha();
+  env.GIT_SHA = sha;
+  // Upstream prefers these CI variables over GIT_SHA. Scope the overrides to
+  // Bun's build processes so GitHub still publishes against rbun's commit.
+  env.GITHUB_SHA = sha;
+  env.BUILDKITE_COMMIT = sha;
   // Upstream pins `codegen-units = 1` for its shipped binary; we only consume the
   // dylib locally, so trade a little codegen quality for a much faster build.
   // (LTO is unaffected: bun's build already sets CARGO_PROFILE_RELEASE_LTO for
@@ -79,7 +82,7 @@ export async function buildBun(buildArgs: string[] = []): Promise<void> {
     run("bun", ["install"], { cwd: DIST_DIR, env });
   }
 
-  run("bun", ["scripts/build.ts", "--profile=release", ...buildArgs], { cwd: DIST_DIR, env });
+  run("bun", ["scripts/build.ts", "--profile=release", "--canary=off", ...buildArgs], { cwd: DIST_DIR, env });
   run("bun", ["scripts/embed-dylib.ts"], { cwd: DIST_DIR, env });
 
   console.log(`built ${path.join(DIST_DIR, "build/release/libbun_embed.dylib")}`);

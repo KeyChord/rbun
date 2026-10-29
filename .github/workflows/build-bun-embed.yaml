@@ -67,9 +67,10 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if gh release view "${{ steps.bun.outputs.tag }}" \
-               --json assets --jq '.assets[].name' 2>/dev/null \
-             | grep -qx "${{ steps.bun.outputs.asset }}"; then
+          assets="$(gh release view "${{ steps.bun.outputs.tag }}" \
+            --json assets --jq '.assets[].name' 2>/dev/null || true)"
+          if grep -Fxq "${{ steps.bun.outputs.asset }}" <<< "$assets" \
+            && grep -Fxq "${{ steps.bun.outputs.asset }}.sha256" <<< "$assets"; then
             echo "asset already published; nothing to do"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
