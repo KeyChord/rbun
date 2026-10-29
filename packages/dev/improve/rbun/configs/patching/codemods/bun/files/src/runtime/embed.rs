@@ -302,7 +302,7 @@ unsafe fn bun_embed_vm_create_impl(
     }
     main.extend_from_slice(b"[rbun-host].js");
     let main: &'static [u8] = Box::leak(main.into_boxed_slice());
-    vm.set_main(main);
+    vm.set_main(Some(main));
 
     // Hold the JSC API lock for the lifetime of this thread, exactly like
     // `Run::start` does for the CLI. Every JSC C API call re-enters it
@@ -493,7 +493,7 @@ pub(crate) unsafe extern "C" fn bun_embed_vm_configure_entrypoint(
         )
     };
     let vm = unsafe { vm_mut(vm) };
-    vm.set_main(main);
+    vm.set_main(Some(main));
     vm.main_hash = bun_watcher::Watcher::get_hash(main);
     vm.main_resolved_path = bun_core::String::EMPTY;
     vm.overridden_main.deinit();
@@ -538,11 +538,11 @@ pub(crate) unsafe extern "C" fn bun_embed_vm_run_eval(
         return 2;
     }
     let vm = unsafe { vm_mut(vm) };
-    let main: &'static [u8] = Box::leak(vm.main().to_vec().into_boxed_slice());
-    if !main.ends_with(b"/[eval]") {
+    let Some(main) = vm.main().filter(|main| main.ends_with(b"/[eval]")) else {
         set_last_error("bun_embed_vm_run_eval: VM entrypoint must end in /[eval]".into());
         return 2;
-    }
+    };
+    let main: &'static [u8] = Box::leak(main.to_vec().into_boxed_slice());
     let source: &'static [u8] = if source_len == 0 {
         b""
     } else {
@@ -554,7 +554,7 @@ pub(crate) unsafe extern "C" fn bun_embed_vm_run_eval(
         )
     };
     vm.module_loader.eval_source = Some(Box::new(bun_ast::Source::init_path_string(main, source)));
-    let promise_ptr = match vm.load_entry_point(main) {
+    let promise_ptr = match vm.load_entry_point(Some(main)) {
         Ok(promise) => promise,
         Err(error) => {
             set_last_error(format!("bun_embed_vm_run_eval: {error:?}"));

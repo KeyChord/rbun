@@ -22,14 +22,16 @@ rbun is the JavaScript runtime embedded in
 
 - **macOS only.** Bun is linked as the shared library `libbun_embed.dylib`,
   and rbun's link step only produces the macOS dylib.
-- **Bun 1.4.3** is the pinned upstream revision (`oven-sh/bun` commit
-  `c6da4a4d3010`).
+- **Bun 1.4.4** is the pinned upstream revision (`oven-sh/bun` commit
+  `38afee6c84fc`).
 - **Not published on crates.io.** Depend on a checkout of this repository by
   path.
 - **Prebuilt dylibs:** CI publishes `libbun_embed.dylib` as GitHub release
   assets. For the current Bun pin only the Apple Silicon (`aarch64`) build is
-  published, because the Intel (`x86_64`) CI build currently exceeds GitHub
-  Actions' 6-hour job limit. On an Intel Mac, build the dylib from source.
+  published, targeting macOS 13 or newer. Homebrew no longer supplies an Intel
+  LLVM bottle, so the Intel (`x86_64`) dependency build exceeds GitHub Actions'
+  job limit. Intel CI is opt-in via `include_intel`; on an Intel Mac, build the
+  dylib from source. Each published dylib has a `.sha256` checksum file.
 
 ## Using rbun
 
@@ -338,9 +340,9 @@ bun run _run-upstream-bun-tests run portable-runtime [substring]
 bun run _run-upstream-bun-tests run runtime-subprocess [substring]
 ```
 
-At pinned Bun 1.4.3 revision `c6da4a4d3`, classification finds 1,078 Bun/Node/Web test
-files: 465 in-process, 502 runtime-subprocess, 52 mixed runtime/CLI, and 59
-CLI-only. Thus 613 files call `bunExe()`/`bunRun()`; the 502 runtime-only files
+At pinned Bun 1.4.4 revision `38afee6c8`, classification finds 1,091 Bun/Node/Web test
+files: 444 in-process, 534 runtime-subprocess, 59 mixed runtime/CLI, and 54
+CLI-only. Thus 647 files call `bunExe()`/`bunRun()`; the 534 runtime-only files
 are the broad subprocess target, while mixed and CLI files are excluded
 because they invoke Bun's package-manager, bundler, or test CLI subcommands.
 

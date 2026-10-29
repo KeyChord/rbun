@@ -14,6 +14,10 @@ on:
         description: Rebuild and overwrite the release even if it already exists
         type: boolean
         default: false
+      include_intel:
+        description: Also attempt Intel (LLVM builds from source and can exceed the job limit)
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -35,11 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: macos-15
-            arch: aarch64
-          - runner: macos-15-intel
-            arch: x86_64
+        include: ${{ fromJSON(inputs.include_intel && '[{"runner":"macos-15","arch":"aarch64","macho_arch":"arm64"},{"runner":"macos-15-intel","arch":"x86_64","macho_arch":"x86_64"}]' || '[{"runner":"macos-15","arch":"aarch64","macho_arch":"arm64"}]') }}
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -55,6 +55,7 @@ jobs:
           echo "short=${sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "tag=bun-embed-${sha:0:12}" >> "$GITHUB_OUTPUT"
           echo "asset=libbun_embed-${{ matrix.arch }}-apple-darwin.dylib" >> "$GITHUB_OUTPUT"
+          echo "version=$(python3 -c 'import json; print(json.load(open("packages/com/github/oven-sh/bun/src/package.json"))["version"])')" >> "$GITHUB_OUTPUT"
 
       - name: Check whether this asset already exists
         id: existing
@@ -77,6 +78,7 @@ jobs:
 
       - name: Install build dependencies
         if: steps.existing.outputs.skip != 'true'
+        timeout-minutes: 30
         run: |
           set -euo pipefail
           brew update
@@ -91,7 +93,7 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ steps.bun.outputs.version }}
 
       - name: Install rustup
         if: steps.existing.outputs.skip != 'true'
@@ -111,7 +113,11 @@ jobs:
       - name: Build libbun_embed
         if: steps.existing.outputs.skip != 'true'
         timeout-minutes: 120
-        run: bun packages/dev/improve/rbun/configs/bun/build/_build-bun.ts
+        run: bun packages/dev/improve/rbun/configs/bun/build/_build-bun.ts --osx-deployment-target=13.0
+
+      - name: Test embedding
+        if: steps.existing.outputs.skip != 'true'
+        run: cargo test --workspace
 
       - name: Stage asset
         if: steps.existing.outputs.skip != 'true'
@@ -123,7 +129,9 @@ jobs:
           cp "$built" "out/${{ steps.bun.outputs.asset }}"
           # Guard against a silent arch mismatch on the runner.
           lipo -info "out/${{ steps.bun.outputs.asset }}"
-          lipo -info "out/${{ steps.bun.outputs.asset }}" | grep -q "${{ matrix.arch }}"
+          lipo -verify_arch "${{ matrix.macho_arch }}" "out/${{ steps.bun.outputs.asset }}"
+          cd out
+          shasum -a 256 "${{ steps.bun.outputs.asset }}" > "${{ steps.bun.outputs.asset }}.sha256"
 
       - name: Publish release asset
         if: steps.existing.outputs.skip != 'true'
@@ -133,10 +141,11 @@ jobs:
           set -euo pipefail
           tag="${{ steps.bun.outputs.tag }}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
-            notes="Prebuilt libbun_embed.dylib for Bun source commit ${{ steps.bun.outputs.sha }}. Consumed by downstream builds via RBUN_BUN_LIB_DIR."
+            notes="Prebuilt libbun_embed.dylib bundling Bun ${{ steps.bun.outputs.version }} (source commit ${{ steps.bun.outputs.sha }}), targeting macOS 13 or newer. Consumed by downstream builds via RBUN_BUN_LIB_DIR. SHA-256 checksums accompany each dylib."
             gh release create "$tag" \
-              --title "libbun_embed (bun ${{ steps.bun.outputs.short }})" \
+              --target "${{ github.sha }}" \
+              --title "rbun — Bun ${{ steps.bun.outputs.version }}" \
               --notes "$notes" \
               --prerelease
           fi
-          gh release upload "$tag" "out/${{ steps.bun.outputs.asset }}" --clobber
+          gh release upload "$tag" "out/${{ steps.bun.outputs.asset }}" "out/${{ steps.bun.outputs.asset }}.sha256" --clobber
