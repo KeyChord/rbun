@@ -17,6 +17,11 @@ fn repo_root(manifest_dir: &Path) -> PathBuf {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=RBUN_BUN_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
+    // docs.rs type-checks the Rust API without linking an executable.
+    if env::var_os("DOCS_RS").is_some() {
+        return;
+    }
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let root = repo_root(&manifest_dir);

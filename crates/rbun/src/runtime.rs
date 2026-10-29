@@ -386,12 +386,12 @@ impl Runtime {
     /// the object are what the module's `import.meta` exposes for the rest of
     /// its life.
     ///
-    /// This is rbun's equivalent of rquickjs' [`Module::meta`], which wraps
+    /// This is rbun's equivalent of rquickjs' `Module::meta`, which wraps
     /// QuickJS' `JS_GetImportMeta`. JavaScriptCore keeps a module's
     /// materialized `import.meta` in its bytecode layer rather than on
     /// `AbstractModuleRecord`, and exposes no public getter for it, so rbun
     /// offers the same capability push-first: the host is handed each object at
-    /// creation instead of fetching it later. [`Module::meta`] still works for
+    /// creation instead of fetching it later. [`Module::meta`](crate::Module::meta) still works for
     /// modules rbun itself declared.
     ///
     /// The hook runs on the runtime's thread while the module is being set up.

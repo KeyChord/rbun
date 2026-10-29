@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 links = "bun_embed"
 
+[package.metadata.docs.rs]
+default-target = "aarch64-apple-darwin"
+targets = ["aarch64-apple-darwin"]
+
 [features]
 default = ["macro"]
 macro = ["dep:rbun-macros"]
