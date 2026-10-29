@@ -12,7 +12,7 @@ default = ["macro"]
 macro = ["dep:rbun-macros"]
 
 [dependencies]
-rbun-macros = { path = "../rbun-macros", optional = true }
+rbun-macros = { version = "0.1.0", path = "../rbun-macros", optional = true }
 serde = { version = "1" }
 serde_json = "1"
 thiserror = "2"
