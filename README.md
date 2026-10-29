@@ -73,6 +73,17 @@ export RBUN_BUN_LIB_DIR="$dir"
 The asset has to be saved as `libbun_embed.dylib`, the file name the build
 script looks for.
 
+You can also install the prebuilt library through the
+[`@keychord/rbun`](https://www.npmjs.com/package/@keychord/rbun) npm package:
+
+```sh
+npm install @keychord/rbun@0.1.0
+export RBUN_BUN_LIB_DIR="$(node -p 'require("@keychord/rbun").libDir')"
+```
+
+The package bundles the same Bun 1.4.4 dylib and its checksum. It supports
+Apple Silicon on macOS 13 or newer and requires no installation scripts.
+
 ### Link it
 
 rbun passes the dylib's directory to the build script of every crate that
@@ -402,5 +413,7 @@ Reading the table:
 - `packages/dev/improve/rbun/configs/patching/` — canonical JSSG codemod, added files,
   fixtures, dependencies, and generated `bun.gen.patch` review diff.
 - `packages/dev/improve/rbun/configs/bun/` — `_build-bun` and upstream test harness bins.
+- `npm/rbun/` — npm distribution of the verified prebuilt dylib, including
+  library-path exports, Bun version metadata, checksums, and license notices.
 - `.github/workflows/build-bun-embed.yaml` — builds `libbun_embed.dylib` on
   macOS runners and publishes it to the `bun-embed-<sha>` release.
