@@ -28,11 +28,10 @@ rbun is the JavaScript runtime embedded in
   [`rbun-macros`](https://crates.io/crates/rbun-macros) are published as `0.1.0`.
   The native Bun library is distributed separately.
 - **Prebuilt dylibs:** CI publishes `libbun_embed.dylib` as GitHub release
-  assets. For the current Bun pin only the Apple Silicon (`aarch64`) build is
-  published, targeting macOS 13 or newer. Homebrew no longer supplies an Intel
-  LLVM bottle, so the Intel (`x86_64`) dependency build exceeds GitHub Actions'
-  job limit. Intel CI is opt-in via `include_intel`; on an Intel Mac, build the
-  dylib from source. Each published dylib has a `.sha256` checksum file.
+  assets for Apple Silicon (`aarch64`) and Intel (`x86_64`), targeting macOS 13
+  or newer. Both architectures build by default. The Intel job uses prebuilt
+  LLVM tools from conda-forge because Homebrew no longer supplies an Intel
+  LLVM bottle. Each published dylib has a `.sha256` checksum file.
 
 ## Using rbun
 

@@ -14,10 +14,6 @@ on:
         description: Rebuild and overwrite the release even if it already exists
         type: boolean
         default: false
-      include_intel:
-        description: Also attempt Intel (LLVM builds from source and can exceed the job limit)
-        type: boolean
-        default: false
   push:
     branches:
       - main
@@ -39,7 +35,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.include_intel && '[{"runner":"macos-15","arch":"aarch64","macho_arch":"arm64"},{"runner":"macos-15-intel","arch":"x86_64","macho_arch":"x86_64"}]' || '[{"runner":"macos-15","arch":"aarch64","macho_arch":"arm64"}]') }}
+        include:
+          - runner: macos-15
+            arch: aarch64
+            macho_arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+            macho_arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -78,17 +80,48 @@ jobs:
           fi
 
       - name: Install build dependencies
-        if: steps.existing.outputs.skip != 'true'
+        if: steps.existing.outputs.skip != 'true' && matrix.arch == 'aarch64'
         timeout-minutes: 30
         run: |
           set -euo pipefail
           brew update
-          # nasm is only needed for the x86_64 codegen path, but installing it
-          # unconditionally keeps the two matrix legs identical.
           brew install llvm@23 automake ccache cmake coreutils gnu-sed go icu4c \
             libiconv libtool nasm ninja pkg-config ruby
           echo "$(brew --prefix llvm@23)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix ccache)/libexec" >> "$GITHUB_PATH"
+
+      # Homebrew no longer bottles LLVM for Intel Macs. Use conda-forge's
+      # prebuilt tools so this job builds Bun rather than spending its limit
+      # compiling LLVM. Keep LLVM aligned with Bun's scripts/build/ci-images/spec.ts.
+      - name: Install Intel build dependencies
+        id: intel
+        if: steps.existing.outputs.skip != 'true' && matrix.arch == 'x86_64'
+        timeout-minutes: 30
+        uses: mamba-org/setup-micromamba@v3
+        with:
+          environment-name: bun-build
+          create-args: >-
+            --override-channels --channel conda-forge --strict-channel-priority
+            clang-23=23.1.1 llvm-tools=23.1.1
+            automake ccache cmake coreutils sed go libiconv libtool nasm ninja pkg-config ruby
+          init-shell: none
+          generate-run-shell: false
+          cache-environment: true
+
+      - name: Configure Intel toolchain
+        if: steps.existing.outputs.skip != 'true' && matrix.arch == 'x86_64'
+        env:
+          TOOLCHAIN: ${{ steps.intel.outputs.environment-path }}
+        run: |
+          set -euo pipefail
+          # The versioned compiler package omits conda's default compiler config
+          # and libc++ headers: Bun must use the macOS SDK's headers and libraries.
+          ln -sf clang-23 "$TOOLCHAIN/bin/clang"
+          ln -sf clang++-23 "$TOOLCHAIN/bin/clang++"
+          echo "$TOOLCHAIN/bin" >> "$GITHUB_PATH"
+          echo "BUN_TOOLCHAIN_LLVM=$TOOLCHAIN" >> "$GITHUB_ENV"
+          "$TOOLCHAIN/bin/clang" --version
+          "$TOOLCHAIN/bin/llvm-nm" --version
 
       - name: Install bun
         if: steps.existing.outputs.skip != 'true'
@@ -106,6 +139,7 @@ jobs:
         with:
           key: bun-embed-${{ matrix.arch }}-${{ steps.bun.outputs.short }}
           max-size: 4G
+          install: "no"
 
       - name: Install workspace dependencies
         if: steps.existing.outputs.skip != 'true'
@@ -143,10 +177,13 @@ jobs:
           tag="${{ steps.bun.outputs.tag }}"
           if ! gh release view "$tag" >/dev/null 2>&1; then
             notes="Prebuilt libbun_embed.dylib bundling Bun ${{ steps.bun.outputs.version }} (source commit ${{ steps.bun.outputs.sha }}), targeting macOS 13 or newer. Consumed by downstream builds via RBUN_BUN_LIB_DIR. SHA-256 checksums accompany each dylib."
+            # The other architecture may create this release between our view
+            # and create calls. Only ignore that successful race.
             gh release create "$tag" \
               --target "${{ github.sha }}" \
               --title "rbun — Bun ${{ steps.bun.outputs.version }}" \
               --notes "$notes" \
-              --prerelease
+              --prerelease \
+              || gh release view "$tag" >/dev/null
           fi
           gh release upload "$tag" "out/${{ steps.bun.outputs.asset }}" "out/${{ steps.bun.outputs.asset }}.sha256" --clobber
