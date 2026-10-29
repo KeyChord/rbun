@@ -139,7 +139,6 @@ jobs:
         with:
           key: bun-embed-${{ matrix.arch }}-${{ steps.bun.outputs.short }}
           max-size: 4G
-          install: "no"
 
       - name: Install workspace dependencies
         if: steps.existing.outputs.skip != 'true'
@@ -154,6 +153,16 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         run: cargo test --workspace
 
+      # Keep the tested output if staging or release publication needs a retry.
+      - name: Save tested library
+        if: steps.existing.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bun-embed-${{ matrix.arch }}-${{ steps.bun.outputs.short }}
+          path: packages/com/github/oven-sh/bun/dist/build/release/libbun_embed.dylib
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Stage asset
         if: steps.existing.outputs.skip != 'true'
         run: |
@@ -164,7 +173,7 @@ jobs:
           cp "$built" "out/${{ steps.bun.outputs.asset }}"
           # Guard against a silent arch mismatch on the runner.
           lipo -info "out/${{ steps.bun.outputs.asset }}"
-          lipo -verify_arch "${{ matrix.macho_arch }}" "out/${{ steps.bun.outputs.asset }}"
+          lipo "out/${{ steps.bun.outputs.asset }}" -verify_arch "${{ matrix.macho_arch }}"
           cd out
           shasum -a 256 "${{ steps.bun.outputs.asset }}" > "${{ steps.bun.outputs.asset }}.sha256"
 
