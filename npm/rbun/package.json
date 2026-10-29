@@ -1,0 +1,44 @@
+{
+  "name": "@keychord/rbun",
+  "version": "0.1.0",
+  "description": "Prebuilt Bun 1.4.4 embedding library for rbun on Apple Silicon macOS",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KeyChord/rbun.git",
+    "directory": "npm/rbun"
+  },
+  "homepage": "https://github.com/KeyChord/rbun#readme",
+  "bugs": "https://github.com/KeyChord/rbun/issues",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.cjs"
+    },
+    "./libbun_embed.dylib": "./libbun_embed.dylib",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.cjs",
+    "index.d.ts",
+    "libbun_embed.dylib",
+    "libbun_embed.dylib.sha256",
+    "BUN-LICENSE.md"
+  ],
+  "scripts": {
+    "prepack": "node prepare.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "rbun": {
+    "bunVersion": "1.4.4",
+    "bunRevision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "minimumMacOS": "13.0"
+  }
+}
