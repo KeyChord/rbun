@@ -24,3 +24,4 @@ node_modules/
 
 # Logs
 *.log
+.claude/settings.local.json
