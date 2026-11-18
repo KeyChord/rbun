@@ -630,6 +630,18 @@ pub struct Ctx<'js> {
     pub(crate) inner: &'js RuntimeInner,
 }
 
+/// Keeps Bun's event loop alive while it exists; see [`Ctx::keep_event_loop_alive`].
+#[must_use = "the event loop is released as soon as the guard is dropped"]
+pub struct EventLoopKeepAlive<'js> {
+    release: Function<'js>,
+}
+
+impl Drop for EventLoopKeepAlive<'_> {
+    fn drop(&mut self) {
+        let _ = self.release.call::<_, ()>(());
+    }
+}
+
 impl<'js> Ctx<'js> {
     pub(crate) fn raw(&self) -> ffi::JSContextRef {
         self.inner.ctx
@@ -736,6 +748,28 @@ impl<'js> Ctx<'js> {
     }
 
     // ─── Event loop ───
+
+    /// Holds Bun's event loop open until the guard is dropped, like a listening
+    /// server would.
+    ///
+    /// The async driver ([`AsyncContext::async_with`](crate::AsyncContext::async_with),
+    /// [`Promise::into_future`](crate::Promise::into_future)) waits inside Bun's
+    /// loop only while that loop is alive. Otherwise it hands the thread back to
+    /// the host executor, and Bun's unreferenced timers (`unref()`), sockets and
+    /// native callbacks wait for the next poll. A host that keeps a context open
+    /// for a long time and waits on its own I/O in between, such as a server
+    /// loop, holds this guard so Bun keeps serving them, and sleeps when there is
+    /// nothing to do. Host wakers interrupt that wait.
+    ///
+    /// The embedding API has no way to reference the loop directly, so this is a
+    /// referenced timer that is never due in practice (about 25 days, the longest
+    /// delay a timer takes, after which it does nothing and waits again).
+    pub fn keep_event_loop_alive(&self) -> Result<EventLoopKeepAlive<'js>> {
+        let release: Function<'js> = self.eval(
+            "(() => { const timer = setInterval(() => {}, 2147483647); return () => clearInterval(timer); })()",
+        )?;
+        Ok(EventLoopKeepAlive { release })
+    }
 
     /// One non-blocking event-loop tick (tasks, immediates, microtasks).
     pub fn tick(&self) {

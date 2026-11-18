@@ -92,7 +92,7 @@ pub use module::{Declarations, Evaluated, Exports, Module, ModuleDef};
 pub use object::{Accessor, AsProperty, Filter, Property};
 pub use persistent::{Outlive, Persistent};
 pub use runtime::{
-    Context, ContextBuilder, Ctx, EvalOptions, ImportMetaHook, JsLifetime, Runtime, RuntimeOptions,
+    Context, ContextBuilder, Ctx, EvalOptions, EventLoopKeepAlive, ImportMetaHook, JsLifetime, Runtime, RuntimeOptions,
     TestResult, UserDataGuard,
 };
 pub use utils::{ResultExt, format_error};

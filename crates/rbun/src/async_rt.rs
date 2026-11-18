@@ -7,6 +7,22 @@
 //! `auto_tick_active`) and every host future spawned with [`Ctx::spawn`].
 //! Wakers from other threads (e.g. a `spawn_blocking` result) wake the
 //! uSockets loop so a blocked `auto_tick_active` returns promptly.
+//!
+//! While Bun's loop is alive the driver does not return to the host executor:
+//! it keeps polling inside a single poll of the host task and sleeps in Bun's
+//! loop in between. Two consequences:
+//!
+//! - Tokio gives a task a fixed budget of channel and socket operations per poll
+//!   and expects it to yield when they run out. The driver never would, so with
+//!   the `tokio` feature everything it polls runs exempt from that budget
+//!   (`tokio::task::unconstrained`); without it, a host future waiting on a tokio
+//!   channel stops receiving once the budget is spent.
+//! - Other tasks on the same single-threaded executor do not run meanwhile. Keep
+//!   I/O that the JS thread waits on in a task on another thread, and hand it over
+//!   through a channel whose waker reaches the driver.
+//!
+//! [`Ctx::keep_event_loop_alive`] makes the driver wait in Bun's loop even when
+//! nothing else holds it open.
 
 use core::cell::RefCell;
 use core::future::Future;
@@ -37,7 +53,7 @@ impl Executor {
     where
         F: Future<Output = ()> + 'js,
     {
-        let boxed: Pin<Box<dyn Future<Output = ()> + 'js>> = Box::pin(future);
+        let boxed: Pin<Box<dyn Future<Output = ()> + 'js>> = Box::pin(exempt_from_budget(future));
         // SAFETY: lifetime erasure — the runtime is process-lifetime on its
         // thread and the executor lives inside it, so a `'js` future can never
         // outlive what it borrows.
@@ -76,6 +92,18 @@ impl Executor {
         let waker = wake_loop_waker(ctx.vm());
         self.poll_all(&waker)
     }
+}
+
+/// Exempts `future` from tokio's per-poll operation budget, which the driver would
+/// otherwise exhaust (see the module documentation).
+#[cfg(feature = "tokio")]
+fn exempt_from_budget<F: Future>(future: F) -> tokio::task::Unconstrained<F> {
+    tokio::task::unconstrained(future)
+}
+
+#[cfg(not(feature = "tokio"))]
+fn exempt_from_budget<F: Future>(future: F) -> F {
+    future
 }
 
 // ─── Wakers ──────────────────────────────────────────────────────────────
@@ -425,7 +453,8 @@ impl<R> Future for WithFuture<'_, R> {
     fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<R> {
         // SAFETY: `WithFuture` is not moved out of; `future` is already pinned.
         let this = unsafe { self.get_unchecked_mut() };
-        drive(this.inner, &mut this.future, cx)
+        let driven = exempt_from_budget(core::future::poll_fn(|cx| drive(this.inner, &mut this.future, cx)));
+        core::pin::pin!(driven).poll(cx)
     }
 }
 
