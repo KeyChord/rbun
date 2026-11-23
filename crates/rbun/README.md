@@ -1,22 +1,22 @@
 # rbun
 
 Embed Bun's JavaScript runtime in Rust, with a public API modeled on rquickjs.
-The pinned engine is **Bun 1.4.4** (`38afee6c84fcf48c0edb2466aa4b27d287a59c30`).
+The pinned engine is **Bun 1.4.5** (`a7733435cf40429e3b35c36072769df2052b80f1`).
 
 ```toml
 [dependencies]
-rbun = "0.1.0"
+rbun = "0.2.0"
 ```
 
 rbun requires `libbun_embed.dylib` at build time and runtime. Prebuilt libraries
-support Apple Silicon on macOS 13 or newer. Intel macOS requires a source build.
+support Apple Silicon and Intel on macOS 13 or newer.
 
 Download the prebuilt library and its checksum:
 
 ```sh
 mkdir -p .rbun
 cd .rbun
-base=https://github.com/KeyChord/rbun/releases/download/bun-embed-38afee6c84fc
+base=https://github.com/KeyChord/rbun/releases/download/bun-embed-a7733435cf40
 curl -fLO "$base/libbun_embed-aarch64-apple-darwin.dylib"
 curl -fLO "$base/libbun_embed-aarch64-apple-darwin.dylib.sha256"
 shasum -a 256 -c libbun_embed-aarch64-apple-darwin.dylib.sha256

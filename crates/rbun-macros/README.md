@@ -9,5 +9,5 @@ Use the `rbun` crate with its default `macro` feature to access
 
 ```toml
 [dependencies]
-rbun = "0.1.0"
+rbun = "0.2.0"
 ```

@@ -22,10 +22,10 @@ rbun is the JavaScript runtime embedded in
 
 - **macOS only.** Bun is linked as the shared library `libbun_embed.dylib`,
   and rbun's link step only produces the macOS dylib.
-- **Bun 1.4.4** is the pinned upstream revision (`oven-sh/bun` commit
-  `38afee6c84fc`).
+- **Bun 1.4.5** is the pinned upstream revision (`oven-sh/bun` commit
+  `a7733435cf40`).
 - **Rust crates:** [`rbun`](https://crates.io/crates/rbun) and
-  [`rbun-macros`](https://crates.io/crates/rbun-macros) are published as `0.1.0`.
+  [`rbun-macros`](https://crates.io/crates/rbun-macros) are published as `0.2.0`.
   The native Bun library is distributed separately.
 - **Prebuilt dylibs:** CI publishes `libbun_embed.dylib` as GitHub release
   assets for Apple Silicon (`aarch64`) and Intel (`x86_64`), targeting macOS 13
@@ -39,7 +39,7 @@ rbun is the JavaScript runtime embedded in
 
 ```toml
 [dependencies]
-rbun = "0.1.0"
+rbun = "0.2.0"
 ```
 
 The default `macro` feature provides `#[rbun::class]` and `#[rbun::methods]`.
@@ -61,7 +61,7 @@ crate's pinned Bun commit. The `build-bun-embed` workflow tags each release
 `libbun_embed-<arch>-apple-darwin.dylib`:
 
 ```sh
-sha="38afee6c84fcf48c0edb2466aa4b27d287a59c30" # rbun 0.1.0 / Bun 1.4.4
+sha="a7733435cf40429e3b35c36072769df2052b80f1" # rbun 0.2.0 / Bun 1.4.5
 dir="$HOME/.cache/rbun/bun-embed-${sha:0:12}"
 mkdir -p "$dir"
 curl -fL -o "$dir/libbun_embed.dylib" \
@@ -76,11 +76,11 @@ You can also install the prebuilt library through the
 [`@keychord/rbun`](https://www.npmjs.com/package/@keychord/rbun) npm package:
 
 ```sh
-npm install @keychord/rbun@0.1.0
+npm install @keychord/rbun@0.2.0
 export RBUN_BUN_LIB_DIR="$(node -p 'require("@keychord/rbun").libDir')"
 ```
 
-The package bundles the same Bun 1.4.4 dylib and its checksum. It supports
+The package bundles the same Bun 1.4.5 dylib and its checksum. It supports
 Apple Silicon on macOS 13 or newer and requires no installation scripts.
 
 ### Link it
@@ -346,7 +346,7 @@ bun run _run-upstream-bun-tests run portable-runtime [substring]
 bun run _run-upstream-bun-tests run runtime-subprocess [substring]
 ```
 
-At pinned Bun 1.4.4 revision `38afee6c8`, classification finds 1,091 Bun/Node/Web test
+At pinned Bun 1.4.5 revision `a7733435c`, classification finds 1,091 Bun/Node/Web test
 files: 444 in-process, 534 runtime-subprocess, 59 mixed runtime/CLI, and 54
 CLI-only. Thus 647 files call `bunExe()`/`bunRun()`; the 534 runtime-only files
 are the broad subprocess target, while mixed and CLI files are excluded

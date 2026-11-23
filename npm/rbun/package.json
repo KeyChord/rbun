@@ -1,7 +1,7 @@
 {
   "name": "@keychord/rbun",
-  "version": "0.1.0",
-  "description": "Prebuilt Bun 1.4.4 embedding library for rbun on Apple Silicon macOS",
+  "version": "0.2.0",
+  "description": "Prebuilt Bun 1.4.5 embedding library for rbun on Apple Silicon macOS",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -37,8 +37,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "rbun": {
-    "bunVersion": "1.4.4",
-    "bunRevision": "38afee6c84fcf48c0edb2466aa4b27d287a59c30",
+    "bunVersion": "1.4.5",
+    "bunRevision": "a7733435cf40429e3b35c36072769df2052b80f1",
     "minimumMacOS": "13.0"
   }
 }

@@ -1,11 +1,11 @@
 # @keychord/rbun
 
 The prebuilt `libbun_embed.dylib` for [rbun](https://github.com/KeyChord/rbun),
-bundling **Bun 1.4.4** (`38afee6c84fcf48c0edb2466aa4b27d287a59c30`).
+bundling **Bun 1.4.5** (`a7733435cf40429e3b35c36072769df2052b80f1`).
 Requires Apple Silicon and macOS 13 or newer.
 
 ```sh
-npm install @keychord/rbun@0.1.0
+npm install @keychord/rbun@0.2.0
 export RBUN_BUN_LIB_DIR="$(node -p 'require("@keychord/rbun").libDir')"
 cargo build
 ```
@@ -13,7 +13,7 @@ cargo build
 Alternatively, install the same tarball directly from the GitHub release:
 
 ```sh
-npm install https://github.com/KeyChord/rbun/releases/download/bun-embed-38afee6c84fc/keychord-rbun-0.1.0.tgz
+npm install https://github.com/KeyChord/rbun/releases/download/bun-embed-a7733435cf40/keychord-rbun-0.2.0.tgz
 ```
 
 Add the Rust `rbun` crate separately from a checkout of the repository. See the
